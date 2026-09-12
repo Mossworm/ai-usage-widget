@@ -50,7 +50,13 @@ sealed class ProviderFactory : IClassFactory
                 try { return Marshal.QueryInterface(unknown, in iid, out instance); }
                 finally { Marshal.Release(unknown); }
             }
-        } catch (Exception e) { return Marshal.GetHRForException(e); }
+        } catch (Exception e) {
+            try {
+                Directory.CreateDirectory(LocalStore.Folder);
+                File.WriteAllText(Path.Combine(LocalStore.Folder, "provider-error.txt"), e.ToString());
+            } catch (Exception logError) when (logError is IOException or UnauthorizedAccessException) { }
+            return Marshal.GetHRForException(e);
+        }
     }
     public int LockServer(bool value) => 0;
 }

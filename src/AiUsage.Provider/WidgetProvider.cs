@@ -19,7 +19,7 @@ public sealed class WidgetProvider : IWidgetProvider
         var on = "data:image/png;base64," + Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Assets", "toggle-on.png")));
         var off = "data:image/png;base64," + Convert.ToBase64String(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Assets", "toggle-off.png")));
         Card.ToggleImage = enabled => enabled ? on : off;
-        foreach (var info in WidgetManager.GetDefault().GetWidgetInfos()) {
+        foreach (var info in WidgetManager.GetDefault().GetWidgetInfos() ?? []) {
             Preferences prefs;
             try { prefs = JsonSerializer.Deserialize<Preferences>(info.CustomState, LocalStore.Json) ?? new(); }
             catch (JsonException) { prefs = new(); }

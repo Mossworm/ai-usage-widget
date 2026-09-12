@@ -13,6 +13,9 @@ foreach ($name in @('Desktop', 'Provider')) {
 }
 & (Join-Path $PSScriptRoot 'New-Assets.ps1') -Destination (Join-Path $stage 'Assets')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'packaging\AppxManifest.xml') -Destination $stage
+# WinRT resolves widget interface metadata from the package root when the host
+# marshals provider callbacks. Keeping it only beside the EXE fails with 0x8000000F.
+Copy-Item -LiteralPath (Join-Path $stage 'Provider\Microsoft.Windows.Widgets.winmd') -Destination $stage
 New-Item -ItemType Directory -Force -Path (Join-Path $stage 'Public'), (Join-Path $stage 'Provider\Assets') | Out-Null
 Copy-Item -Path (Join-Path $stage 'Assets\toggle-*.png') -Destination (Join-Path $stage 'Provider\Assets')
 $exe = Join-Path $stage 'Desktop\AiUsage.Desktop.exe'
