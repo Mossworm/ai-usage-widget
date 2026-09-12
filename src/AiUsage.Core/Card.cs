@@ -11,12 +11,7 @@ public static class Card
     static object Bar(UsageWindow window, bool secondary) => new { type = "Image", url = CardImages.Progress(window.Percent, secondary), size = "Stretch", height = "3px", spacing = "None", altText = UiText.Choose($"{window.Label} remaining {Labels.Percent(window.Percent)}", $"{window.Label} 남은 비율 {Labels.Percent(window.Percent)}") };
     public static string Render(Preferences prefs, UsageSnapshot data, DateTimeOffset now)
     {
-        var body = new List<object> {
-            new { type = "ActionSet", actions = new[] {
-                Action((prefs.Settings ? "" : "● ") + UiText.Choose("Status", "상태"), "status"),
-                Action((prefs.Settings ? "● " : "") + UiText.Choose("Settings", "설정"), "settings")
-            }, spacing = "None" }
-        };
+        var body = new List<object>();
         if (prefs.Settings)
         {
             body.Add(new { type = "TextBlock", text = UiText.Choose("SERVICES", "서비스"), weight = "Bolder", size = "Small", spacing = "Medium" });

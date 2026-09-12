@@ -19,7 +19,7 @@ Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니�
 
 Codex CLI가 이미 설치되고 ChatGPT 계정으로 로그인되어 있으면 앱 실행 시 자동 연결됩니다. 이 PC에서 실제 조회를 검증했습니다.
 
-처음 연결하거나 인증이 만료된 경우 데스크톱 앱의 **Setting → Codex 로그인 / 다시 연결**을 누르고 열린 브라우저에서 로그인하세요. 위젯 패널의 같은 버튼은 데스크톱 앱으로 연결됩니다. 비밀번호는 브라우저의 OpenAI 로그인 화면에서 직접 입력합니다. 상단 탭은 기존 Status / Setting 두 개 그대로입니다.
+처음 연결하거나 인증이 만료된 경우 데스크톱 앱의 **Setting → Codex 로그인 / 다시 연결**을 누르고 열린 브라우저에서 로그인하세요. 위젯 패널에서는 위젯의 `...` 메뉴에서 **Customize widget**을 선택해 Setting 화면으로 전환한 뒤 같은 연결 버튼을 사용할 수 있습니다. 비밀번호는 브라우저의 OpenAI 로그인 화면에서 직접 입력합니다. 위젯 카드 상단의 Status / Setting 버튼은 표시하지 않으며, 데스크톱 미리보기의 탭은 유지합니다.
 
 CLI가 없다면 설치하고 로그인하세요.
 
@@ -83,6 +83,18 @@ powershell -ExecutionPolicy Bypass -File scripts/Install-Dev.ps1
 
 이후 **Win + W → 위젯 추가 → AI Usage**를 고정하세요. 작음·보통·큼 크기를 지원하며 모든 크기에 동일한 레이아웃을 사용하므로 작은 크기에서는 일부 내용이 잘릴 수 있습니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
 
+개발 등록을 제거하려면 다음 명령을 실행하세요. 기본적으로 앱 등록만 제거하고 `%LOCALAPPDATA%/AiUsageWidget`의 설정은 보존합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Uninstall-Dev.ps1
+```
+
+저장된 토글과 연결 관련 앱 설정까지 함께 지우려면 `-RemoveSettings`를 추가합니다. Codex·Claude·Gemini CLI 자체와 각 CLI의 로그인 정보는 삭제하지 않습니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/Uninstall-Dev.ps1 -RemoveSettings
+```
+
 위젯 패널은 Windows가 Adaptive Card를 렌더링하므로 버튼·간격·모서리가 데스크톱 미리보기와 일부 다릅니다. 실제 패널에서의 최종 모양과 테마 전환은 설치 후 확인해야 합니다.
 
 ## 사용량 데이터 계약
@@ -105,9 +117,11 @@ API 비용 수집기가 `%LOCALAPPDATA%/AiUsageWidget/usage.json`에 `examples/u
 dotnet run --project tests/AiUsage.Checks
 ```
 
-토글 독립성·저장 복원, 전체 끄기, 미연결/0 비용 구분, 리셋 계산, 잘못된 데이터 복구, 두 탭의 카드 액션을 검사합니다. 빌드 과정에서 라이트·다크 Status / Setting PNG를 `artifacts/package/Assets`에 렌더링합니다.
+토글 독립성·저장 복원, 전체 끄기, 미연결/0 비용 구분, 리셋 계산, 잘못된 데이터 복구, 위젯 상단 내비게이션 제거, 사용자 지정 메뉴와 콜백 프록시 등록을 검사합니다. 빌드 과정에서 라이트·다크 Status / Setting PNG를 `artifacts/package/Assets`에 렌더링합니다.
 
-현재 검증 결과: 기존 기능과 세 서비스 응답 매핑, 가짜 HTTP 전송을 이용한 인증·갱신·프로젝트 조회·429 대기·401 메시지·인증 파일 보존 검사 65개 통과. Codex는 실제 계정 조회를 검증했습니다. Claude·Gemini의 실제 로그인 완료 및 라이브 사용량 조회는 사용자 요청으로 보류했습니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
+`Customize widget` 메뉴가 열려도 설정 화면으로 바뀌지 않는다면 패키지 매니페스트의 `IWidgetProvider2` 프록시 등록을 확인하세요. 이 프로젝트는 MSIX를 직접 조립하므로 Windows App SDK의 `package.appxfragment`에 있는 사용자 지정 콜백 프록시를 데스크톱 COM용 `windows.comInterface` 형식으로 `packaging/AppxManifest.xml`에 명시합니다. `IsCustomizable`과 C# 인터페이스 구현만으로는 프로세스 간 콜백 전달이 되지 않습니다. [COM 인터페이스 등록 문서](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-com-cominterface)를 참고하세요. 매니페스트 변경 후에는 패키지 버전을 올리고, 빌드와 `scripts/Install-Dev.ps1` 실행으로 패키지를 다시 등록해야 합니다.
+
+현재 검증 결과: 기존 기능과 세 서비스 응답 매핑, 가짜 HTTP 전송을 이용한 인증·갱신·프로젝트 조회·429 대기·401 메시지·인증 파일 보존 검사 70개 통과. Codex는 실제 계정 조회를 검증했습니다. Claude·Gemini의 실제 로그인 완료 및 라이브 사용량 조회는 사용자 요청으로 보류했습니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
 
 v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 완료했습니다. 샘플 Status와 로그인 버튼이 포함된 실제 Setting의 라이트·다크 PNG도 확인했습니다.
 

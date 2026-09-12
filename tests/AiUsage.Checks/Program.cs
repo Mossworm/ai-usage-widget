@@ -1,6 +1,7 @@
 using AiUsage;
 using System.Globalization;
 using System.Text.Json;
+using System.Xml.Linq;
 
 CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 
@@ -27,6 +28,17 @@ if (args.Contains("--live-claude") || args.Contains("--live-gemini")) {
 
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); Console.WriteLine("PASS " + name); passed++; }
+var manifest = XDocument.Load(Path.Combine(AppContext.BaseDirectory, "AppxManifest.xml"));
+XNamespace packageNs = "http://schemas.microsoft.com/appx/manifest/foundation/windows10";
+var definition = manifest.Descendants(packageNs + "Definition").Single(x => (string?)x.Attribute("Id") == "AiUsage");
+Check((string?)definition.Attribute("IsCustomizable") == "true", "Widget menu enables customization");
+XNamespace comNs = "http://schemas.microsoft.com/appx/manifest/com/windows10";
+var customizationInterface = manifest.Descendants(comNs + "Interface")
+    .SingleOrDefault(x => string.Equals((string?)x.Attribute("Id"), "38C3A963-DD93-479D-9276-04BF84EE1816", StringComparison.OrdinalIgnoreCase));
+var customizationProxy = customizationInterface?.Parent?.Elements(comNs + "ProxyStub")
+    .SingleOrDefault(x => (string?)x.Attribute("Id") == (string?)customizationInterface.Attribute("ProxyStubClsid"));
+Check(string.Equals((string?)customizationProxy?.Attribute("Id"), "93022121-B6C9-4A22-90DB-763E24FD99E1", StringComparison.OrdinalIgnoreCase)
+    && (string?)customizationProxy?.Attribute("Path") == @"Provider\Microsoft.Windows.Widgets.dll", "Customization callback has the packaged Widgets SDK proxy");
 var now = new DateTimeOffset(2026, 9, 12, 12, 0, 0, TimeSpan.FromHours(9));
 var data = Catalog.Sample(now);
 var prefs = new Preferences();
@@ -42,18 +54,16 @@ using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     Check(text.Contains("Claude API"), "API visibility independent of subscription");
     var body = doc.RootElement.GetProperty("body");
     Check(body[body.GetArrayLength() - 1].GetProperty("type").GetString() == "ColumnSet", "Status has no footer");
-    var actions = doc.RootElement.GetProperty("body")[0].GetProperty("actions");
-    Check(actions.GetArrayLength() == 2, "Exactly two navigation buttons");
-    Check(actions[0].GetProperty("verb").GetString() == "status" && actions[1].GetProperty("verb").GetString() == "settings", "Navigation actions route correctly");
+    Check(!text.Contains("\"verb\":\"status\"") && !text.Contains("\"verb\":\"settings\""), "Widget has no Status or Settings navigation buttons");
 }
 prefs.Settings = true;
 using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     var body = doc.RootElement.GetProperty("body");
-    Check(body.GetArrayLength() == 8, "Sample settings contains header and six toggles");
-    Check(body[4].GetProperty("selectAction").GetProperty("verb").GetString() == "toggle:claude", "Setting row targets correct service");
+    Check(body.GetArrayLength() == 7, "Sample settings contains header and six toggles");
+    Check(body[3].GetProperty("selectAction").GetProperty("verb").GetString() == "toggle:claude", "Setting row targets correct service");
 }
 prefs.Settings = false; prefs.Enabled.Clear();
-using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) Check(doc.RootElement.GetProperty("body")[1].GetProperty("text").GetString()!.Contains("No AI services to display"), "All-disabled empty state");
+using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) Check(doc.RootElement.GetProperty("body")[0].GetProperty("text").GetString()!.Contains("No AI services to display"), "All-disabled empty state");
 Check(Labels.Percent(null) == "—", "Unknown usage is not shown as zero");
 Check(Labels.Percent(100) == "0%" && Labels.Percent(0) == "100%", "Exhausted quota is zero remaining");
 Check(Labels.Percent(130) == "0%" && Labels.Percent(-1) == "100%", "Remaining progress values bounded");
@@ -69,8 +79,7 @@ CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ko-KR");
 Check(Labels.Reset(now.AddMinutes(162), now) == "2시간 42분 후 리셋", "ko-KR selects Korean translation");
 using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     var body = doc.RootElement.GetProperty("body");
-    Check(body[0].GetProperty("actions")[0].GetProperty("title").GetString()!.Contains("상태")
-        && body[1].GetProperty("text").GetString()!.Contains("표시할 AI가 없습니다"), "ko-KR localizes widget navigation and content");
+    Check(body[0].GetProperty("text").GetString()!.Contains("표시할 AI가 없습니다"), "ko-KR localizes widget content");
 }
 CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-GB");
 Check(Labels.Reset(now.AddMinutes(162), now) == "Resets in 2h 42m", "Non-ko-KR locale falls back to English");

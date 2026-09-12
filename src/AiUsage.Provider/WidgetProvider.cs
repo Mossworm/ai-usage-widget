@@ -4,8 +4,8 @@ using Microsoft.Windows.Widgets.Providers;
 
 namespace AiUsage.Provider;
 
-[ComVisible(true), Guid(Program.ClassId)]
-public sealed class WidgetProvider : IWidgetProvider
+[ComVisible(true), ComDefaultInterface(typeof(IWidgetProvider)), Guid(Program.ClassId)]
+public sealed class WidgetProvider : IWidgetProvider, IWidgetProvider2
 {
     public static readonly ManualResetEvent Exit = new(false);
     readonly object gate = new();
@@ -75,14 +75,27 @@ public sealed class WidgetProvider : IWidgetProvider
     }
     public void Deactivate(string widgetId) { lock (gate) active.Remove(widgetId); }
     public void OnWidgetContextChanged(WidgetContextChangedArgs args) { lock (gate) Update(args.WidgetContext.Id); }
+    public void OnCustomizationRequested(WidgetCustomizationRequestedArgs args)
+    {
+        lock (gate) {
+            var id = args.WidgetContext.Id;
+            if (!widgets.TryGetValue(id, out var prefs)) {
+                // Customization may be the first callback after provider activation.
+                try { prefs = JsonSerializer.Deserialize<Preferences>(args.CustomState, LocalStore.Json) ?? new(); }
+                catch (JsonException) { prefs = new(); }
+                if (prefs.Enabled is null) prefs = new();
+                widgets[id] = prefs;
+            }
+            prefs.Settings = true;
+            Update(id);
+        }
+    }
     public void OnActionInvoked(WidgetActionInvokedArgs args)
     {
         lock (gate) {
             var id = args.WidgetContext.Id;
             if (!widgets.TryGetValue(id, out var prefs)) return;
-            if (args.Verb == "settings") prefs.Settings = true;
-            else if (args.Verb == "status") prefs.Settings = false;
-            else if (args.Verb.StartsWith("toggle:", StringComparison.Ordinal)) prefs.Toggle(args.Verb[7..]);
+            if (args.Verb.StartsWith("toggle:", StringComparison.Ordinal)) prefs.Toggle(args.Verb[7..]);
             Update(id);
         }
     }

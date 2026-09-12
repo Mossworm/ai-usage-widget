@@ -27,7 +27,7 @@ static class SubscriptionChecks
         check(SubscriptionLogin.FromArgument("aiusage:login-gemini?command=evil") is null, "Protocol does not accept arbitrary commands");
         using var card = JsonDocument.Parse(Card.Render(new() { Settings = true }, new(null, []), now));
         var body = card.RootElement.GetProperty("body");
-        var loginActions = body.EnumerateArray().Where(x => x.GetProperty("type").GetString() == "ActionSet").Skip(1)
+        var loginActions = body.EnumerateArray().Where(x => x.GetProperty("type").GetString() == "ActionSet")
             .SelectMany(x => x.GetProperty("actions").EnumerateArray()).ToArray();
         check(loginActions.Length == 3, "Settings exposes all three login actions");
 
