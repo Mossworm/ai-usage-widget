@@ -8,7 +8,7 @@ public sealed class SubscriptionFeed
     sealed class Slot(string id, Func<CancellationToken, Task<UsageEntry>> fetch, TimeSpan interval)
     {
         public readonly SemaphoreSlim Gate = new(1, 1);
-        public UsageEntry Current = new(id, Status: UiText.Choose("Checking connection…", "연결 확인 중…"));
+        public UsageEntry Current = new(id, Status: "Checking connection…");
         public DateTimeOffset Next;
         public DateTimeOffset BlockedUntil;
         public readonly Func<CancellationToken, Task<UsageEntry>> Fetch = fetch;
@@ -27,7 +27,7 @@ public sealed class SubscriptionFeed
         var ready = live.Count(x => x.UpdatedAt is not null && x.Status is null);
         return stored with {
             Services = stored.Services.Where(x => !slots.ContainsKey(x.Id)).Concat(live).ToArray(),
-            Notice = live.Length == 0 ? null : UiText.Choose($"Connected {ready}/{live.Length} · auto refresh", $"연결 {ready}/{live.Length} · 자동 업데이트")
+            Notice = live.Length == 0 ? null : $"Connected {ready}/{live.Length} · auto refresh"
         };
     }
     public Task RefreshAsync(IReadOnlySet<string> enabled, bool force = false, CancellationToken cancellation = default)
@@ -42,10 +42,10 @@ public sealed class SubscriptionFeed
             if (DateTimeOffset.UtcNow < slot.BlockedUntil || (!force && DateTimeOffset.UtcNow < slot.Next)) return;
             slot.Next = DateTimeOffset.UtcNow.Add(slot.Interval);
             try { Volatile.Write(ref slot.Current, await slot.Fetch(cancellation)); }
-            catch (OperationCanceledException) when (!cancellation.IsCancellationRequested) { Volatile.Write(ref slot.Current, new(id, Status: UiText.Choose("Request timed out · waiting to retry", "조회 시간 초과 · 재시도 대기"))); }
+            catch (OperationCanceledException) when (!cancellation.IsCancellationRequested) { Volatile.Write(ref slot.Current, new(id, Status: "Request timed out · waiting to retry")); }
             catch (Exception e) when (e is UsageConnectionException or CodexException or IOException or Win32Exception or JsonException or UnauthorizedAccessException or HttpRequestException) {
                 if (e is UsageConnectionException { RetryAfter: { } delay }) slot.BlockedUntil = slot.Next = DateTimeOffset.UtcNow.Add(delay);
-                Volatile.Write(ref slot.Current, new(id, Status: e is UsageConnectionException or CodexException ? e.Message : UiText.Choose("Connection failed · check installation, login, and network", "연결 실패 · 설치·로그인·네트워크 확인")));
+                Volatile.Write(ref slot.Current, new(id, Status: e is UsageConnectionException or CodexException ? e.Message : "Connection failed · check installation, login, and network"));
             }
         } finally { slot.Gate.Release(); }
     }

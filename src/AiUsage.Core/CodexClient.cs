@@ -13,7 +13,7 @@ public static class CodexExecutable
         var configured = Environment.GetEnvironmentVariable("CODEX_BIN");
         if (!string.IsNullOrWhiteSpace(configured)) {
             if (Path.IsPathFullyQualified(configured) && configured.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(configured)) return configured;
-            throw new CodexException(UiText.Choose("Set CODEX_BIN to the full path of codex.exe.", "CODEX_BIN에 codex.exe의 전체 경로를 지정해주세요."));
+            throw new CodexException("Set CODEX_BIN to the full path of codex.exe.");
         }
         var folders = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
             .Concat([Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs")]);
@@ -27,7 +27,7 @@ public static class CodexExecutable
                 Path.Combine(package, "vendor", "x86_64-pc-windows-msvc", "codex", "codex.exe")
             }) if (File.Exists(path)) return path;
         }
-        throw new CodexException(UiText.Choose("Codex CLI was not found. Install it and try again.", "Codex CLI가 없습니다. 설치 후 다시 실행해주세요."));
+        throw new CodexException("Codex CLI was not found. Install it and try again.");
     }
     internal static Process Start(params string[] arguments)
     {
@@ -37,7 +37,7 @@ public static class CodexExecutable
             WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
         };
         foreach (var argument in arguments) info.ArgumentList.Add(argument);
-        return Process.Start(info) ?? throw new CodexException(UiText.Choose("Could not start Codex.", "Codex를 실행하지 못했습니다."));
+        return Process.Start(info) ?? throw new CodexException("Could not start Codex.");
     }
     internal static void Stop(Process process)
     {
@@ -64,8 +64,8 @@ public sealed class CodexClient
             var identity = Get(account, "account");
             var type = String(identity, "type");
             if (identity.ValueKind == JsonValueKind.Null || identity.ValueKind == JsonValueKind.Undefined)
-                throw new CodexException(UiText.Choose("Codex login is required. Connect it in Settings.", "Codex 로그인이 필요합니다. 설정에서 연결해주세요."));
-            if (type == "apiKey") throw new CodexException(UiText.Choose("You are signed in with an API key. Sign in to Codex with your ChatGPT account.", "API 키 로그인입니다. ChatGPT 계정으로 Codex에 로그인해주세요."));
+                throw new CodexException("Codex login is required. Connect it in Settings.");
+            if (type == "apiKey") throw new CodexException("You are signed in with an API key. Sign in to Codex with your ChatGPT account.");
             var limits = await RpcAsync(process, 3, "account/rateLimits/read", new { }, timeout.Token);
             return Parse(limits, String(identity, "planType"), DateTimeOffset.Now);
         }
@@ -82,7 +82,7 @@ public sealed class CodexClient
         var stderr = DrainAsync(process.StandardError, timeout.Token);
         try {
             await process.WaitForExitAsync(timeout.Token);
-            if (process.ExitCode != 0) throw new CodexException(UiText.Choose("Login did not complete. Try connecting again.", "로그인을 완료하지 못했습니다. 다시 연결해주세요."));
+            if (process.ExitCode != 0) throw new CodexException("Login did not complete. Try connecting again.");
         } finally { timeout.Cancel(); CodexExecutable.Stop(process); await Task.WhenAll(stdout, stderr); }
     }
     static async Task DrainAsync(StreamReader reader, CancellationToken token)
@@ -98,8 +98,8 @@ public sealed class CodexClient
         await process.StandardInput.FlushAsync(token);
         while (true) {
             var line = await process.StandardOutput.ReadLineAsync(token);
-            if (line is null) throw new CodexException(UiText.Choose("The Codex connection closed. Try again.", "Codex 연결이 종료되었습니다. 다시 시도해주세요."));
-            if (line.Length > 2_000_000) throw new CodexException(UiText.Choose("The Codex response exceeded the expected size.", "Codex 응답 크기가 예상 범위를 초과했습니다."));
+            if (line is null) throw new CodexException("The Codex connection closed. Try again.");
+            if (line.Length > 2_000_000) throw new CodexException("The Codex response exceeded the expected size.");
             using var document = JsonDocument.Parse(line);
             var root = document.RootElement;
             var responseId = Get(root, "id");
@@ -107,11 +107,11 @@ public sealed class CodexClient
             if (root.TryGetProperty("error", out var error)) {
                 var message = String(error, "message") ?? "";
                 if (new[] { "auth", "login", "401", "unauthorized" }.Any(s => message.Contains(s, StringComparison.OrdinalIgnoreCase)))
-                    throw new CodexException(UiText.Choose("Codex authentication expired. Reconnect in Settings.", "Codex 인증이 만료되었습니다. 설정에서 다시 연결해주세요."));
-                throw new CodexException(UiText.Choose("Could not retrieve Codex usage. It will retry shortly.", "Codex 사용량 조회에 실패했습니다. 잠시 후 다시 시도합니다."));
+                    throw new CodexException("Codex authentication expired. Reconnect in Settings.");
+                throw new CodexException("Could not retrieve Codex usage. It will retry shortly.");
             }
             var result = Get(root, "result");
-            if (result.ValueKind != JsonValueKind.Object) throw new CodexException(UiText.Choose("The Codex response format is invalid.", "Codex 응답 형식이 올바르지 않습니다."));
+            if (result.ValueKind != JsonValueKind.Object) throw new CodexException("The Codex response format is invalid.");
             return result.Clone();
         }
     }
@@ -121,7 +121,7 @@ public sealed class CodexClient
         if (limits.ValueKind != JsonValueKind.Object) limits = Get(result, "rateLimits");
         var limitId = String(limits, "limitId");
         if (limits.ValueKind != JsonValueKind.Object || (limitId is not null && limitId != "codex"))
-            throw new CodexException(UiText.Choose("No default Codex quota data is available.", "Codex 기본 한도 데이터가 없습니다."));
+            throw new CodexException("No default Codex quota data is available.");
         double? session = null, weekly = null;
         DateTimeOffset? sessionReset = null, weeklyReset = null;
         foreach (var key in new[] { "primary", "secondary" }) {
@@ -140,7 +140,7 @@ public sealed class CodexClient
             else { weekly = used; weeklyReset = reset; }
         }
         return new("chatgpt", String(limits, "planType") ?? plan, session, sessionReset, weekly, weeklyReset,
-            Status: session is null && weekly is null ? UiText.Choose("This account does not provide 5-hour or weekly quotas.", "5시간·주간 한도가 제공되지 않는 계정입니다.") : null, UpdatedAt: now);
+            Status: session is null && weekly is null ? "This account does not provide 5-hour or weekly quotas." : null, UpdatedAt: now);
     }
     internal static JsonElement Get(JsonElement element, string name) => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) ? value : default;
     internal static string? String(JsonElement element, string name) { var value = Get(element, name); return value.ValueKind == JsonValueKind.String ? value.GetString() : null; }
@@ -154,7 +154,7 @@ public sealed class CodexUsageFeed
 {
     readonly SemaphoreSlim gate = new(1, 1);
     readonly CodexClient client = new();
-    UsageEntry current = new("chatgpt", Status: UiText.Choose("Connecting to Codex usage…", "Codex 사용량 연결 중…"));
+    UsageEntry current = new("chatgpt", Status: "Connecting to Codex usage…");
     DateTimeOffset nextFetch;
     public UsageSnapshot Read(bool includeCodex = true)
     {
@@ -174,9 +174,9 @@ public sealed class CodexUsageFeed
             if (!force && DateTimeOffset.UtcNow < nextFetch) return;
             nextFetch = DateTimeOffset.UtcNow.AddMinutes(2);
             try { Volatile.Write(ref current, await client.FetchAsync(cancellation)); }
-            catch (OperationCanceledException) when (!cancellation.IsCancellationRequested) { Volatile.Write(ref current, new("chatgpt", Status: UiText.Choose("The Codex request timed out. It will retry shortly.", "Codex 조회 시간이 초과되었습니다. 잠시 후 재시도합니다."))); }
+            catch (OperationCanceledException) when (!cancellation.IsCancellationRequested) { Volatile.Write(ref current, new("chatgpt", Status: "The Codex request timed out. It will retry shortly.")); }
             catch (Exception e) when (e is CodexException or IOException or Win32Exception or JsonException or UnauthorizedAccessException) {
-                Volatile.Write(ref current, new("chatgpt", Status: e is CodexException ? e.Message : UiText.Choose("Could not connect to Codex. Check the installation and network.", "Codex에 연결할 수 없습니다. 설치·네트워크를 확인해주세요.")));
+                Volatile.Write(ref current, new("chatgpt", Status: e is CodexException ? e.Message : "Could not connect to Codex. Check the installation and network."));
             }
         } finally { gate.Release(); }
     }

@@ -13,6 +13,11 @@ foreach ($name in @('Desktop', 'Provider')) {
 }
 & (Join-Path $PSScriptRoot 'New-Assets.ps1') -Destination (Join-Path $stage 'Assets')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'packaging\AppxManifest.xml') -Destination $stage
+# Replace staged resources so removed translations cannot survive a rebuild.
+$stagedStrings = [IO.Path]::GetFullPath((Join-Path $stage 'Strings'))
+$stageRoot = [IO.Path]::GetFullPath($stage).TrimEnd('\') + '\'
+if (-not $stagedStrings.StartsWith($stageRoot, [StringComparison]::OrdinalIgnoreCase)) { throw 'Resource path is outside the package directory.' }
+if (Test-Path -LiteralPath $stagedStrings) { Remove-Item -LiteralPath $stagedStrings -Recurse -Force }
 Copy-Item -LiteralPath (Join-Path $projectRoot 'packaging\Strings') -Destination $stage -Recurse -Force
 # WinRT resolves widget interface metadata from the package root when the host
 # marshals provider callbacks. Keeping it only beside the EXE fails with 0x8000000F.

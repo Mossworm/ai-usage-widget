@@ -75,8 +75,8 @@ public static class LocalStore
 public static class Labels
 {
     public static UsageWindow[] Windows(Service service, UsageEntry? usage) => usage?.Windows ?? (service.Id == "gemini"
-        ? [new(UiText.Choose("Model quota", "모델 한도"), null, null)]
-        : [new(UiText.Choose("5-hour", "5시간"), usage?.SessionPercent, usage?.SessionReset), new(UiText.Choose("Weekly", "주간"), usage?.WeeklyPercent, usage?.WeeklyReset)]);
+        ? [new("Model quota", null, null)]
+        : [new("5-hour", usage?.SessionPercent, usage?.SessionReset), new("Weekly", usage?.WeeklyPercent, usage?.WeeklyReset)]);
     public static double? RemainingPercent(double? used) => used is null || !double.IsFinite(used.Value)
         ? null
         : 100 - Math.Clamp(used.Value, 0, 100);
@@ -84,22 +84,22 @@ public static class Labels
     public static string Money(decimal? n) => n is null || n < 0 ? "—" : n.Value.ToString("C2", CultureInfo.GetCultureInfo("en-US"));
     public static string Reset(DateTimeOffset? time, DateTimeOffset now)
     {
-        if (time is null) return UiText.Choose("Reset time unavailable", "리셋 시간 없음");
+        if (time is null) return "Reset time unavailable";
         var left = time.Value - now;
-        if (left <= TimeSpan.Zero) return UiText.Choose("Waiting for reset", "리셋 확인 대기");
+        if (left <= TimeSpan.Zero) return "Waiting for reset";
         return left.TotalDays >= 1
-            ? UiText.Choose($"Resets {time.Value.ToLocalTime():M'/'d HH:mm}", $"{time.Value.ToLocalTime():M'/'d HH:mm} 리셋")
-            : UiText.Choose($"Resets in {(int)left.TotalHours}h {left.Minutes}m", $"{(int)left.TotalHours}시간 {left.Minutes}분 후 리셋");
+            ? $"Resets {time.Value.ToLocalTime():M'/'d HH:mm}"
+            : $"Resets in {(int)left.TotalHours}h {left.Minutes}m";
     }
     public static string Footer(UsageSnapshot data, DateTimeOffset now)
     {
-        if (data.IsSample) return UiText.Choose("Sample data · not actual usage", "샘플 데이터 · 실제 사용량이 아닙니다");
+        if (data.IsSample) return "Sample data · not actual usage";
         if (data.Notice is not null) return data.Notice;
-        if (data.UpdatedAt is null) return UiText.Choose("Waiting for connection · no usage data", "연결 대기 · 사용량 데이터 없음");
-        if (data.UpdatedAt > now.AddMinutes(1)) return UiText.Choose("Check update time", "업데이트 시간 확인 필요");
+        if (data.UpdatedAt is null) return "Waiting for connection · no usage data";
+        if (data.UpdatedAt > now.AddMinutes(1)) return "Check update time";
         var age = now - data.UpdatedAt.Value;
         return age.TotalMinutes >= 5
-            ? UiText.Choose($"Last updated {data.UpdatedAt.Value.ToLocalTime():M'/'d HH:mm} · stale data", $"마지막 업데이트 {data.UpdatedAt.Value.ToLocalTime():M'/'d HH:mm} · 오래된 데이터")
-            : UiText.Choose($"Last updated {Math.Max(0, (int)age.TotalSeconds)}s ago", $"마지막 업데이트 {Math.Max(0, (int)age.TotalSeconds)}초 전");
+            ? $"Last updated {data.UpdatedAt.Value.ToLocalTime():M'/'d HH:mm} · stale data"
+            : $"Last updated {Math.Max(0, (int)age.TotalSeconds)}s ago";
     }
 }

@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.IO;
 using System.Windows;
 
@@ -9,9 +8,6 @@ public partial class App : Application
     {
         base.OnStartup(e);
         var sample = e.Args.Contains("--sample");
-        // Packaged preview images are the language-neutral English fallback.
-        // The live app and widget still use the user's Windows UI culture.
-        if (e.Args.Contains("--render")) CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
         var window = new MainWindow(sample);
         if (e.Args.Contains("--render")) {
             var index = Array.IndexOf(e.Args, "--render");

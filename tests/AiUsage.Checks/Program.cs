@@ -76,13 +76,13 @@ Check(Labels.Reset(now.AddDays(7), now).Contains("/"), "Long reset date uses sla
 Check(Labels.Footer(new(null, []), now).Contains("Waiting for connection"), "Disconnected footer");
 Check(Labels.Footer(new(now.AddHours(-1), []), now).Contains("stale data"), "Stale data is indicated");
 CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ko-KR");
-Check(Labels.Reset(now.AddMinutes(162), now) == "2시간 42분 후 리셋", "ko-KR selects Korean translation");
+Check(Labels.Reset(now.AddMinutes(162), now) == "Resets in 2h 42m", "Korean Windows UI language keeps English labels");
 using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     var body = doc.RootElement.GetProperty("body");
-    Check(body[0].GetProperty("text").GetString()!.Contains("표시할 AI가 없습니다"), "ko-KR localizes widget content");
+    Check(body[0].GetProperty("text").GetString()!.Contains("No AI services to display"), "Korean Windows UI language keeps English widget content");
 }
 CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-GB");
-Check(Labels.Reset(now.AddMinutes(162), now) == "Resets in 2h 42m", "Non-ko-KR locale falls back to English");
+Check(Labels.Reset(now.AddMinutes(162), now) == "Resets in 2h 42m", "Other Windows UI languages keep English labels");
 CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 var dir = Path.Combine(Path.GetTempPath(), "AiUsageChecks-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(dir);
