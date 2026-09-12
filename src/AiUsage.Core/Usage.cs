@@ -77,14 +77,17 @@ public static class Labels
     public static UsageWindow[] Windows(Service service, UsageEntry? usage) => usage?.Windows ?? (service.Id == "gemini"
         ? [new("모델 한도", null, null)]
         : [new("5시간", usage?.SessionPercent, usage?.SessionReset), new("주간", usage?.WeeklyPercent, usage?.WeeklyReset)]);
-    public static string Percent(double? n) => n is null || !double.IsFinite(n.Value) ? "—" : $"{Math.Clamp(n.Value, 0, 100):0}%";
+    public static double? RemainingPercent(double? used) => used is null || !double.IsFinite(used.Value)
+        ? null
+        : 100 - Math.Clamp(used.Value, 0, 100);
+    public static string Percent(double? used) => RemainingPercent(used) is double remaining ? $"{remaining:0}%" : "—";
     public static string Money(decimal? n) => n is null || n < 0 ? "—" : n.Value.ToString("C2", CultureInfo.GetCultureInfo("en-US"));
     public static string Reset(DateTimeOffset? time, DateTimeOffset now)
     {
         if (time is null) return "리셋 시간 없음";
         var left = time.Value - now;
         if (left <= TimeSpan.Zero) return "리셋 확인 대기";
-        return left.TotalDays >= 1 ? $"{time.Value.ToLocalTime():M/d HH:mm} 리셋" : $"{(int)left.TotalHours}시간 {left.Minutes}분 후 리셋";
+        return left.TotalDays >= 1 ? $"{time.Value.ToLocalTime():M'/'d HH:mm} 리셋" : $"{(int)left.TotalHours}시간 {left.Minutes}분 후 리셋";
     }
     public static string Footer(UsageSnapshot data, DateTimeOffset now)
     {
@@ -93,6 +96,6 @@ public static class Labels
         if (data.UpdatedAt is null) return "연결 대기 · 사용량 데이터 없음";
         if (data.UpdatedAt > now.AddMinutes(1)) return "업데이트 시간 확인 필요";
         var age = now - data.UpdatedAt.Value;
-        return age.TotalMinutes >= 5 ? $"마지막 업데이트 {data.UpdatedAt.Value.ToLocalTime():M/d HH:mm} · 오래된 데이터" : $"마지막 업데이트 {Math.Max(0, (int)age.TotalSeconds)}초 전";
+        return age.TotalMinutes >= 5 ? $"마지막 업데이트 {data.UpdatedAt.Value.ToLocalTime():M'/'d HH:mm} · 오래된 데이터" : $"마지막 업데이트 {Math.Max(0, (int)age.TotalSeconds)}초 전";
     }
 }

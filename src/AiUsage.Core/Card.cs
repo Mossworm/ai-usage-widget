@@ -8,7 +8,7 @@ public static class Card
     static object Text(string text, bool subtle = false) => new { type = "TextBlock", text, wrap = true, size = "Small", spacing = "None", isSubtle = subtle };
     static object Action(string title, string verb) => new { type = "Action.Execute", title, verb, associatedInputs = "none" };
     static object Column(object[] items, object? width = null) => new { type = "Column", width = width ?? "stretch", items, spacing = "Small" };
-    static object Bar(UsageWindow window, bool secondary) => new { type = "Image", url = CardImages.Progress(window.Percent, secondary), size = "Stretch", height = "3px", spacing = "None", altText = $"{window.Label} 사용률 {Labels.Percent(window.Percent)}" };
+    static object Bar(UsageWindow window, bool secondary) => new { type = "Image", url = CardImages.Progress(window.Percent, secondary), size = "Stretch", height = "3px", spacing = "None", altText = $"{window.Label} 남은 비율 {Labels.Percent(window.Percent)}" };
     public static string Render(Preferences prefs, UsageSnapshot data, DateTimeOffset now)
     {
         var body = new List<object> {
@@ -28,9 +28,11 @@ public static class Card
             }
             if (!data.IsSample) body.Add(new { type = "ActionSet", actions = new[] {
                 new { type = "Action.OpenUrl", title = "Codex 연결", url = "aiusage:login" },
-                new { type = "Action.OpenUrl", title = "Claude 연결", url = "aiusage:login-claude" },
-                new { type = "Action.OpenUrl", title = "Gemini 연결", url = "aiusage:login-gemini" }
+                new { type = "Action.OpenUrl", title = "Claude 연결", url = "aiusage:login-claude" }
             }, spacing = "Medium" });
+            if (!data.IsSample) body.Add(new { type = "ActionSet", actions = new[] {
+                new { type = "Action.OpenUrl", title = "Gemini 연결", url = "aiusage:login-gemini" }
+            }, spacing = "Small" });
         }
         else
         {
@@ -56,7 +58,6 @@ public static class Card
                 } });
             }
             if (prefs.Enabled.Count == 0) body.Add(Text("표시할 AI가 없습니다. Setting에서 서비스를 켜주세요.", true));
-            body.Add(new { type = "TextBlock", text = Labels.Footer(data, now), size = "Small", isSubtle = true, wrap = true, separator = true, spacing = "Small", horizontalAlignment = "Center" });
         }
         return JsonSerializer.Serialize(new Dictionary<string, object> { ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json", ["type"] = "AdaptiveCard", ["version"] = "1.5", ["body"] = body });
     }

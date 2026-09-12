@@ -1,4 +1,4 @@
-# AI Usage Widget
+# Agent Usage Widget
 
 Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude·Gemini 로그인은 Setting에서 브라우저로 연결합니다.
 
@@ -31,7 +31,7 @@ codex login
 
 구현은 로컬 `codex app-server --listen stdio://`에 `initialize` → `initialized` → `account/read` → `account/rateLimits/read` 순서로 요청합니다. 프롬프트 실행이나 모델 호출은 하지 않습니다. 로그인은 공식 `codex login`이 담당합니다. 위젯은 `auth.json`, 비밀번호, 액세스 토큰, 갱신 토큰을 읽거나 별도로 저장하지 않으며, 이메일·계정 ID도 저장하지 않습니다. 사용량은 메모리에만 보관합니다.
 
-사용한 비율(`usedPercent`)을 표시합니다. 서버의 `windowDurationMins`가 300인 창을 5시간, 10080인 창을 주간으로 매핑합니다. 주간 한도만 있는 계정은 5시간을 `—`로 표시하며, 다른 모델/코드 리뷰 한도를 섞지 않습니다. 조회 실패 시 이전 계정의 수치를 남기지 않고 연결 상태를 표시한 후 2분 간격으로 재시도합니다. 자동 조회는 브라우저를 열지 않습니다.
+서버의 사용 비율(`usedPercent`)을 남은 비율로 변환해 표시합니다. 서버의 `windowDurationMins`가 300인 창을 5시간, 10080인 창을 주간으로 매핑합니다. 주간 한도만 있는 계정은 5시간을 `—`로 표시하며, 다른 모델/코드 리뷰 한도를 섞지 않습니다. 조회 실패 시 이전 계정의 수치를 남기지 않고 연결 상태를 표시한 후 2분 간격으로 재시도합니다. 자동 조회는 브라우저를 열지 않습니다.
 
 ## 실행
 
@@ -80,7 +80,7 @@ powershell -ExecutionPolicy Bypass -File scripts/Build.ps1
 powershell -ExecutionPolicy Bypass -File scripts/Install-Dev.ps1
 ```
 
-이후 **Win + W → 위젯 추가 → AI Usage**를 고정하세요. 6개 서비스를 표시하기 위해 큰 크기만 지원합니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
+이후 **Win + W → 위젯 추가 → Agent Usage**를 고정하세요. 6개 서비스를 표시하기 위해 큰 크기만 지원합니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
 
 위젯 패널은 Windows가 Adaptive Card를 렌더링하므로 버튼·간격·모서리가 데스크톱 미리보기와 일부 다릅니다. 실제 패널에서의 최종 모양과 테마 전환은 설치 후 확인해야 합니다.
 

@@ -6,25 +6,25 @@
  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
  IgnorableNamespaces="uap uap3 com rescap">
   <Identity Name="Mossworm.AiUsageWidget" Publisher="CN=Mossworm" Version="1.2.0.0" ProcessorArchitecture="x64" />
-  <Properties><DisplayName>AI Usage</DisplayName><PublisherDisplayName>Mossworm</PublisherDisplayName><Logo>Assets\StoreLogo.png</Logo></Properties>
+  <Properties><DisplayName>Agent Usage</DisplayName><PublisherDisplayName>Mossworm</PublisherDisplayName><Logo>Assets\StoreLogo.png</Logo></Properties>
   <Resources><Resource Language="ko-KR" /><Resource Language="en-US" /></Resources>
   <Dependencies><TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22621.0" MaxVersionTested="10.0.26100.0" /></Dependencies>
   <Applications>
     <Application Id="App" Executable="Desktop\AiUsage.Desktop.exe" EntryPoint="Windows.FullTrustApplication">
-      <uap:VisualElements DisplayName="AI Usage" Description="AI 사용량 위젯" BackgroundColor="transparent" Square150x150Logo="Assets\Logo.png" Square44x44Logo="Assets\SmallLogo.png" />
+      <uap:VisualElements DisplayName="Agent Usage" Description="AI 사용량 위젯" BackgroundColor="transparent" Square150x150Logo="Assets\Logo.png" Square44x44Logo="Assets\SmallLogo.png" />
       <Extensions>
-        <uap:Extension Category="windows.protocol"><uap:Protocol Name="aiusage"><uap:DisplayName>AI Usage Codex Login</uap:DisplayName></uap:Protocol></uap:Extension>
+        <uap:Extension Category="windows.protocol"><uap:Protocol Name="aiusage"><uap:DisplayName>Agent Usage Codex Login</uap:DisplayName></uap:Protocol></uap:Extension>
         <com:Extension Category="windows.comServer"><com:ComServer>
-          <com:ExeServer Executable="Provider\AiUsage.Provider.exe" DisplayName="AI Usage Provider">
-            <com:Class Id="D43F207B-60E5-40DB-A084-980655913C8C" DisplayName="AI Usage Provider" />
+          <com:ExeServer Executable="Provider\AiUsage.Provider.exe" DisplayName="Agent Usage Provider">
+            <com:Class Id="D43F207B-60E5-40DB-A084-980655913C8C" DisplayName="Agent Usage Provider" />
           </com:ExeServer>
         </com:ComServer></com:Extension>
         <uap3:Extension Category="windows.appExtension">
-          <uap3:AppExtension Name="com.microsoft.windows.widgets" DisplayName="AI Usage" Id="AiUsage" PublicFolder="Public">
+          <uap3:AppExtension Name="com.microsoft.windows.widgets" DisplayName="Agent Usage" Id="AiUsage" PublicFolder="Public">
             <uap3:Properties><WidgetProvider>
               <ProviderIcons><Icon Path="Assets\SmallLogo.png" /></ProviderIcons>
               <Activation><CreateInstance ClassId="D43F207B-60E5-40DB-A084-980655913C8C" /></Activation>
-              <Definitions><Definition Id="AiUsage" DisplayName="AI Usage" Description="AI 플랜 한도와 API 비용을 한눈에 확인하세요." AllowMultiple="false">
+              <Definitions><Definition Id="AiUsage" DisplayName="Agent Usage" Description="AI 플랜 한도와 API 비용을 한눈에 확인하세요." AllowMultiple="false">
                 <Capabilities><Capability><Size Name="large" /></Capability></Capabilities>
                 <ThemeResources>
                   <Icons><Icon Path="Assets\SmallLogo.png" /></Icons>

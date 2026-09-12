@@ -38,7 +38,7 @@ using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     Check(!text.Contains("Claude  ·"), "Disabled subscription hidden");
     Check(text.Contains("Claude API"), "API visibility independent of subscription");
     var body = doc.RootElement.GetProperty("body");
-    Check(body[body.GetArrayLength() - 1].GetProperty("text").GetString()!.Contains("샘플 데이터"), "Sample data is labeled");
+    Check(body[body.GetArrayLength() - 1].GetProperty("type").GetString() == "ColumnSet", "Status has no footer");
     var actions = doc.RootElement.GetProperty("body")[0].GetProperty("actions");
     Check(actions.GetArrayLength() == 2, "Exactly two navigation buttons");
     Check(actions[0].GetProperty("verb").GetString() == "status" && actions[1].GetProperty("verb").GetString() == "settings", "Navigation actions route correctly");
@@ -46,18 +46,20 @@ using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
 prefs.Settings = true;
 using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     var body = doc.RootElement.GetProperty("body");
-    Check(body.GetArrayLength() == 8, "Settings contains header and six toggles");
+    Check(body.GetArrayLength() == 8, "Sample settings contains header and six toggles");
     Check(body[4].GetProperty("selectAction").GetProperty("verb").GetString() == "toggle:claude", "Setting row targets correct service");
 }
 prefs.Settings = false; prefs.Enabled.Clear();
 using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) Check(doc.RootElement.GetProperty("body")[1].GetProperty("text").GetString()!.Contains("표시할 AI가 없습니다"), "All-disabled empty state");
 Check(Labels.Percent(null) == "—", "Unknown usage is not shown as zero");
-Check(Labels.Percent(130) == "100%" && Labels.Percent(-1) == "0%", "Progress values bounded");
+Check(Labels.Percent(100) == "0%" && Labels.Percent(0) == "100%", "Exhausted quota is zero remaining");
+Check(Labels.Percent(130) == "0%" && Labels.Percent(-1) == "100%", "Remaining progress values bounded");
 Check(Labels.Percent(double.NaN) == "—", "Nonfinite usage rejected");
 Check(Labels.Money(null) == "—" && Labels.Money(-1) == "—", "Unknown or invalid cost not shown as zero");
 Check(Labels.Money(0) == "$0.00", "Known zero cost distinct from unknown");
 Check(Labels.Reset(now.AddMinutes(-1), now) == "리셋 확인 대기", "Expired reset never becomes negative countdown");
 Check(Labels.Reset(now.AddMinutes(162), now) == "2시간 42분 후 리셋", "Countdown computed from timestamp");
+Check(Labels.Reset(now.AddDays(7), now).Contains("/"), "Long reset date uses slash separator");
 Check(Labels.Footer(new(null, []), now).Contains("연결 대기"), "Disconnected footer");
 Check(Labels.Footer(new(now.AddHours(-1), []), now).Contains("오래된 데이터"), "Stale data is indicated");
 var dir = Path.Combine(Path.GetTempPath(), "AiUsageChecks-" + Guid.NewGuid().ToString("N"));
@@ -94,7 +96,10 @@ try { Parse("""{"rateLimits":{"limitId":"code_review"}}"""); Check(false, "Wrong
 catch (CodexException) { Check(true, "Unrelated quota is not displayed as Codex"); }
 using (var doc = JsonDocument.Parse(Card.Render(new() { Settings = true }, new(null, []), now))) {
     var body = doc.RootElement.GetProperty("body");
-    Check(body[body.GetArrayLength() - 1].GetProperty("actions")[0].GetProperty("url").GetString() == "aiusage:login", "Native widget connects through registered login protocol");
+    var firstRow = body[body.GetArrayLength() - 2].GetProperty("actions");
+    var secondRow = body[body.GetArrayLength() - 1].GetProperty("actions");
+    Check(firstRow.GetArrayLength() == 2 && secondRow.GetArrayLength() == 1, "Connection actions are limited to two per row");
+    Check(firstRow[0].GetProperty("url").GetString() == "aiusage:login", "Native widget connects through registered login protocol");
 }
 await SubscriptionChecks.RunAsync(Check, now);
 Console.WriteLine($"{passed} checks passed.");

@@ -25,3 +25,9 @@ Setting을 누를경우 widget layout setting 창이 뜸
 코덱스 사용량 가져오는 api 예제
 https://github.com/spourdei/codex-usage-widget?utm_source=chatgpt.com
 https://github.com/ZeroP27/codex-usage?utm_source=chatgpt.com
+
+지금은 5시간 사용량이랑 남은 사용량이 다썼을때 100% 로 표기되고있어 이거를 다 썼을때를 0% 로 나타나게 바꿔줘
+Setting 탭에 Codex 연결, Claude 연결, Gemini 연결 버튼이 한줄로 길게 표시되서 Gemini 연결 버튼이 잘려보여 연결 버튼을 한줄에 2개씩만 배치해줘
+지금은 Status의 제일 하단에 연결 1/3 자동업데이트 글씨가 있는데 이거 필요없어 없애줘
+
+AI Usage 라는 위젯 이름은 Agent Usage로 바꿔주고 주간 리셋 텍스트가 9-19 17:13 리셋 이라고 표기되는데 이걸 9/19 17:13 리셋 으로 바꿔줘

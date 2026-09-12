@@ -9,4 +9,4 @@ catch {
     }
     throw
 }
-Write-Host 'Registered AI Usage. Press Win+W, open Add widgets, and pin AI Usage.'
+Write-Host 'Registered Agent Usage. Press Win+W, open Add widgets, and pin Agent Usage.'

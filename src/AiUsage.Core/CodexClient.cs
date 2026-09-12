@@ -57,7 +57,7 @@ public sealed class CodexClient
         // Drain stderr without displaying or retaining potentially sensitive CLI diagnostics.
         var drain = DrainAsync(process.StandardError, timeout.Token);
         try {
-            await RpcAsync(process, 1, "initialize", new { clientInfo = new { name = "ai_usage_widget", title = "AI Usage Widget", version = "1.1.0" } }, timeout.Token);
+            await RpcAsync(process, 1, "initialize", new { clientInfo = new { name = "ai_usage_widget", title = "Agent Usage Widget", version = "1.1.0" } }, timeout.Token);
             await process.StandardInput.WriteLineAsync("{\"method\":\"initialized\"}".AsMemory(), timeout.Token);
             await process.StandardInput.FlushAsync(timeout.Token);
             var account = await RpcAsync(process, 2, "account/read", new { refreshToken = false }, timeout.Token);

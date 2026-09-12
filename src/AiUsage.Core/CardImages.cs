@@ -9,7 +9,7 @@ public static class CardImages
 {
     public static string Progress(double? value, bool weekly)
     {
-        var p = value.HasValue && double.IsFinite(value.Value) ? Math.Clamp(value.Value, 0, 100) : 0;
+        var p = Labels.RemainingPercent(value) ?? 0;
         return Png(560, 8, (x, y) => x < 560 * p / 100
             ? weekly ? (112, 187, 123, 255) : (75, 163, 239, 255)
             : (140, 145, 155, 45));

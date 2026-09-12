@@ -30,7 +30,7 @@ public sealed class MainWindow : Window
         this.sample = sample;
         prefs = sample ? new() : LocalStore.ReadPreferences();
         prefs.Settings = false;
-        Title = sample ? "AI Usage · 샘플 미리보기" : "AI Usage";
+        Title = sample ? "Agent Usage · 샘플 미리보기" : "Agent Usage";
         Width = 382; Height = 626; MinWidth = 330; MinHeight = 350;
         FontFamily = new("Segoe UI"); FontSize = 13;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -93,7 +93,8 @@ public sealed class MainWindow : Window
         settings.SetResourceReference(Button.BackgroundProperty, prefs.Settings ? "Selected" : "Nav");
         content.Children.Clear();
         var data = sample ? demo : feed.Read(prefs.Enabled);
-        footer.Text = loginMessage ?? (prefs.Settings ? "" : Labels.Footer(data, DateTimeOffset.Now));
+        footer.Text = prefs.Settings ? loginMessage ?? "" : "";
+        footer.Visibility = prefs.Settings && loginMessage is not null ? Visibility.Visible : Visibility.Collapsed;
         if (prefs.Settings) {
             content.Children.Add(new TextBlock { Text = "SERVICES", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new(20, 12, 20, 12) });
             foreach (var service in Catalog.Services) {
@@ -108,11 +109,15 @@ public sealed class MainWindow : Window
                 };
                 DockPanel.SetDock(toggle, Dock.Right); row.Children.Add(toggle); row.Children.Add(Text(service.Name, size: 13)); content.Children.Add(row);
             }
-            if (!sample) foreach (var id in new[] { "chatgpt", "claude", "gemini" }) {
-                var connect = new Button { Content = $"{SubscriptionLogin.Name(id)} 로그인 / 다시 연결", Margin = new(20, 8, 20, 0), IsEnabled = !loginPending };
-                connect.SetResourceReference(Button.BackgroundProperty, "Nav");
-                connect.Click += async (_, _) => await ConnectSubscriptionAsync(id);
-                content.Children.Add(connect);
+            if (!sample) {
+                var connections = new UniformGrid { Columns = 2, Margin = new(14, 8, 14, 0) };
+                foreach (var id in new[] { "chatgpt", "claude", "gemini" }) {
+                    var connect = new Button { Content = $"{SubscriptionLogin.Name(id)} 연결", Margin = new(6, 4, 6, 4), IsEnabled = !loginPending };
+                    connect.SetResourceReference(Button.BackgroundProperty, "Nav");
+                    connect.Click += async (_, _) => await ConnectSubscriptionAsync(id);
+                    connections.Children.Add(connect);
+                }
+                content.Children.Add(connections);
             }
             return;
         }
@@ -143,7 +148,7 @@ public sealed class MainWindow : Window
     }
     FrameworkElement Progress(double? value, string color)
     {
-        var fraction = value.HasValue && double.IsFinite(value.Value) ? Math.Clamp(value.Value, 0, 100) : 0;
+        var fraction = Labels.RemainingPercent(value) ?? 0;
         var grid = new Grid { Height = 4 };
         grid.ColumnDefinitions.Add(new() { Width = new(fraction, GridUnitType.Star) });
         grid.ColumnDefinitions.Add(new() { Width = new(100 - fraction, GridUnitType.Star) });
