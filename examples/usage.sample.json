@@ -1,0 +1,12 @@
+{
+  "UpdatedAt": "2026-09-12T15:00:00+09:00",
+  "IsSample": true,
+  "Services": [
+    { "Id": "chatgpt", "Plan": "Plus", "SessionPercent": 23, "SessionReset": "2026-09-12T18:12:00+09:00", "WeeklyPercent": 38, "WeeklyReset": "2026-09-16T15:00:00+09:00" },
+    { "Id": "openai-api", "MonthCost": 12.48, "DayCost": 0.82 },
+    { "Id": "claude", "Plan": "Max", "SessionPercent": 7, "SessionReset": "2026-09-12T17:42:00+09:00", "WeeklyPercent": 14, "WeeklyReset": "2026-09-15T15:00:00+09:00" },
+    { "Id": "anthropic-api", "MonthCost": 8.64, "DayCost": 0.36 },
+    { "Id": "gemini", "Plan": "Pro", "Windows": [{ "Label": "gemini-pro", "Percent": 51, "Reset": "2026-09-13T01:00:00+09:00" }, { "Label": "gemini-flash", "Percent": 16, "Reset": "2026-09-13T01:00:00+09:00" }] },
+    { "Id": "gemini-api" }
+  ]
+}

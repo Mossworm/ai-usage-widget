@@ -1,0 +1,27 @@
+윈도우의 위젯패널에서 볼 수 있는 ai agent의 사용량을 보여주는 위젯을 만들꺼야
+위젯은 default window widget 처럼 기본 윈도우의 라이트모드와 다크모드의 테마를 따르도록 할꺼야
+
+위젯 레이아웃은 window layout.png처럼 만들어주고 setting 버튼을 누르면 widget layout setting.png 처럼 어떤 ai or ai api usage를 사용할껀지
+토글로 활성화 할 수 있도록 할꺼야
+
+기능은 딱 widget layout.png에만 있는 기능만 있으면돼
+
+최상위 버튼 (Status \ Setting) Logs는 일단 만들지 말고 버튼 두개만 만들어줘
+
+Staute 를 누를경우 window layout 창이 뜸
+Setting을 누를경우 widget layout setting 창이 뜸
+
+[Status 창]
+1. ai 이름 및 플랜 표시
+2. 5시간 한도 - 리셋 시간
+3. 주간 한도 - 리셋 시간
+
+만약 api일 경우
+이번달 사용량 - 하루 사용량
+
+[setting 창]
+1. 표시할 ai를 설정하는 설정창
+
+코덱스 사용량 가져오는 api 예제
+https://github.com/spourdei/codex-usage-widget?utm_source=chatgpt.com
+https://github.com/ZeroP27/codex-usage?utm_source=chatgpt.com
