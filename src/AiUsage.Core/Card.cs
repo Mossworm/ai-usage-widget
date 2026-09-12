@@ -31,6 +31,15 @@ public static class Card
             if (!data.IsSample) body.Add(new { type = "ActionSet", actions = new[] {
                 new { type = "Action.OpenUrl", title = UiText.Choose("Connect Gemini", "Gemini 연결"), url = "aiusage:login-gemini" }
             }, spacing = "Small" });
+            body.Add(new {
+                type = "Container", height = "stretch", verticalContentAlignment = "bottom", spacing = "Medium",
+                items = new[] { new {
+                    type = "ColumnSet", columns = new[] {
+                        Column([]),
+                        Column([new { type = "ActionSet", actions = new[] { Action("Back", "status") } }], "auto")
+                    }
+                } }
+            });
         }
         else
         {

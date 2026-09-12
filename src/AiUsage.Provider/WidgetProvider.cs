@@ -95,7 +95,8 @@ public sealed class WidgetProvider : IWidgetProvider, IWidgetProvider2
         lock (gate) {
             var id = args.WidgetContext.Id;
             if (!widgets.TryGetValue(id, out var prefs)) return;
-            if (args.Verb.StartsWith("toggle:", StringComparison.Ordinal)) prefs.Toggle(args.Verb[7..]);
+            if (args.Verb == "status") prefs.Settings = false;
+            else if (args.Verb.StartsWith("toggle:", StringComparison.Ordinal)) prefs.Toggle(args.Verb[7..]);
             Update(id);
         }
     }

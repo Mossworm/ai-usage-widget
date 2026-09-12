@@ -59,7 +59,7 @@ using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
 prefs.Settings = true;
 using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     var body = doc.RootElement.GetProperty("body");
-    Check(body.GetArrayLength() == 7, "Sample settings contains header and six toggles");
+    Check(body.GetArrayLength() == 8, "Sample settings contains header, six toggles and Back footer");
     Check(body[3].GetProperty("selectAction").GetProperty("verb").GetString() == "toggle:claude", "Setting row targets correct service");
 }
 prefs.Settings = false; prefs.Enabled.Clear();
@@ -118,8 +118,8 @@ try { Parse("""{"rateLimits":{"limitId":"code_review"}}"""); Check(false, "Wrong
 catch (CodexException) { Check(true, "Unrelated quota is not displayed as Codex"); }
 using (var doc = JsonDocument.Parse(Card.Render(new() { Settings = true }, new(null, []), now))) {
     var body = doc.RootElement.GetProperty("body");
-    var firstRow = body[body.GetArrayLength() - 2].GetProperty("actions");
-    var secondRow = body[body.GetArrayLength() - 1].GetProperty("actions");
+    var firstRow = body[body.GetArrayLength() - 3].GetProperty("actions");
+    var secondRow = body[body.GetArrayLength() - 2].GetProperty("actions");
     Check(firstRow.GetArrayLength() == 2 && secondRow.GetArrayLength() == 1, "Connection actions are limited to two per row");
     Check(firstRow[0].GetProperty("url").GetString() == "aiusage:login", "Native widget connects through registered login protocol");
 }
