@@ -80,7 +80,7 @@ powershell -ExecutionPolicy Bypass -File scripts/Build.ps1
 powershell -ExecutionPolicy Bypass -File scripts/Install-Dev.ps1
 ```
 
-이후 **Win + W → 위젯 추가 → Agent Usage**를 고정하세요. 6개 서비스를 표시하기 위해 큰 크기만 지원합니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
+이후 **Win + W → 위젯 추가 → Agent Usage**를 고정하세요. 작음·보통·큼 크기를 지원하며 모든 크기에 동일한 레이아웃을 사용하므로 작은 크기에서는 일부 내용이 잘릴 수 있습니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
 
 위젯 패널은 Windows가 Adaptive Card를 렌더링하므로 버튼·간격·모서리가 데스크톱 미리보기와 일부 다릅니다. 실제 패널에서의 최종 모양과 테마 전환은 설치 후 확인해야 합니다.
 

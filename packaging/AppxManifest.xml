@@ -25,7 +25,11 @@
               <ProviderIcons><Icon Path="Assets\SmallLogo.png" /></ProviderIcons>
               <Activation><CreateInstance ClassId="D43F207B-60E5-40DB-A084-980655913C8C" /></Activation>
               <Definitions><Definition Id="AiUsage" DisplayName="Agent Usage" Description="AI 플랜 한도와 API 비용을 한눈에 확인하세요." AllowMultiple="false">
-                <Capabilities><Capability><Size Name="large" /></Capability></Capabilities>
+                <Capabilities>
+                  <Capability><Size Name="small" /></Capability>
+                  <Capability><Size Name="medium" /></Capability>
+                  <Capability><Size Name="large" /></Capability>
+                </Capabilities>
                 <ThemeResources>
                   <Icons><Icon Path="Assets\SmallLogo.png" /></Icons>
                   <Screenshots><Screenshot Path="Assets\status-light.png" DisplayAltText="AI 사용량 샘플 미리보기" /></Screenshots>
