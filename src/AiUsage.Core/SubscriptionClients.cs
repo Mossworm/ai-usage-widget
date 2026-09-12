@@ -23,19 +23,19 @@ internal static class UsageHttp
         using var response = await client.SendAsync(request, token);
         if (response.StatusCode == HttpStatusCode.TooManyRequests) {
             var delay = response.Headers.RetryAfter?.Delta ?? (response.Headers.RetryAfter?.Date - DateTimeOffset.UtcNow) ?? TimeSpan.FromMinutes(15);
-            throw new UsageConnectionException($"{service} 조회 제한 · 잠시 후 재시도", TimeSpan.FromSeconds(Math.Clamp(delay.TotalSeconds, 300, 86400)));
+            throw new UsageConnectionException(UiText.Choose($"{service} rate limited · retrying later", $"{service} 조회 제한 · 잠시 후 재시도"), TimeSpan.FromSeconds(Math.Clamp(delay.TotalSeconds, 300, 86400)));
         }
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            throw new UsageConnectionException($"{service} 인증·계정 권한 확인 필요 · Setting에서 다시 연결");
-        if (!response.IsSuccessStatusCode) throw new UsageConnectionException($"{service} 조회 실패 (HTTP {(int)response.StatusCode})");
+            throw new UsageConnectionException(UiText.Choose($"Check {service} authentication and account access · reconnect in Settings", $"{service} 인증·계정 권한 확인 필요 · 설정에서 다시 연결"));
+        if (!response.IsSuccessStatusCode) throw new UsageConnectionException(UiText.Choose($"{service} request failed (HTTP {(int)response.StatusCode})", $"{service} 조회 실패 (HTTP {(int)response.StatusCode})"));
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
-        if (json.RootElement.ValueKind != JsonValueKind.Object) throw new UsageConnectionException($"{service} 응답 형식 확인 필요");
+        if (json.RootElement.ValueKind != JsonValueKind.Object) throw new UsageConnectionException(UiText.Choose($"Check the {service} response format", $"{service} 응답 형식 확인 필요"));
         return json.RootElement.Clone();
     }
     public static async Task<JsonElement> CredentialsAsync(string path, string service, CancellationToken token)
     {
-        if (!File.Exists(path)) throw new UsageConnectionException($"{service} 로그인 필요 · Setting에서 연결");
-        if (new FileInfo(path).Length > 262144) throw new UsageConnectionException($"{service} 인증 파일 형식 확인 필요");
+        if (!File.Exists(path)) throw new UsageConnectionException(UiText.Choose($"{service} login required · connect in Settings", $"{service} 로그인 필요 · 설정에서 연결"));
+        if (new FileInfo(path).Length > 262144) throw new UsageConnectionException(UiText.Choose($"Check the {service} credential file format", $"{service} 인증 파일 형식 확인 필요"));
         using var json = JsonDocument.Parse(await File.ReadAllTextAsync(path, token));
         return json.RootElement.Clone();
     }
@@ -51,9 +51,9 @@ public sealed class ClaudeClient(HttpClient? http = null, string? credentialsPat
         var root = await UsageHttp.CredentialsAsync(credentialsPath ?? Path.Combine(folder, ".credentials.json"), "Claude", cancellation);
         var oauth = Get(root, "claudeAiOauth");
         var access = String(oauth, "accessToken");
-        if (string.IsNullOrWhiteSpace(access)) throw new UsageConnectionException("Claude 구독 계정 로그인 필요 · Setting에서 연결");
+        if (string.IsNullOrWhiteSpace(access)) throw new UsageConnectionException(UiText.Choose("Claude subscription login required · connect in Settings", "Claude 구독 계정 로그인 필요 · 설정에서 연결"));
         if (Get(oauth, "expiresAt").TryNumber(out var expires) && expires <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
-            throw new UsageConnectionException("Claude 로그인 만료 · Setting에서 다시 연결");
+            throw new UsageConnectionException(UiText.Choose("Claude login expired · reconnect in Settings", "Claude 로그인 만료 · 설정에서 다시 연결"));
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/api/oauth/usage");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
         request.Headers.Add("anthropic-beta", "oauth-2025-04-20");
@@ -64,11 +64,11 @@ public sealed class ClaudeClient(HttpClient? http = null, string? credentialsPat
     public static UsageEntry Parse(JsonElement result, string? plan, DateTimeOffset now)
     {
         if (!result.TryGetProperty("five_hour", out _) && !result.TryGetProperty("seven_day", out _))
-            throw new UsageConnectionException("Claude 한도 응답 형식 확인 필요");
+            throw new UsageConnectionException(UiText.Choose("Check the Claude quota response format", "Claude 한도 응답 형식 확인 필요"));
         var session = Get(result, "five_hour"); var weekly = Get(result, "seven_day");
         var first = UsageHttp.Percentage(session, "utilization"); var second = UsageHttp.Percentage(weekly, "utilization");
         return new("claude", plan, first, UsageHttp.Date(session, "resets_at"), second, UsageHttp.Date(weekly, "resets_at"),
-            Status: first is null && second is null ? "Claude 한도 데이터 없음" : null, UpdatedAt: now);
+            Status: first is null && second is null ? UiText.Choose("No Claude quota data", "Claude 한도 데이터 없음") : null, UpdatedAt: now);
     }
 }
 
@@ -93,7 +93,7 @@ public sealed class GeminiClient(HttpClient? http = null, string? credentialsPat
         var loaded = await PostAsync("loadCodeAssist", access, new { cloudaicompanionProject = project, metadata = new { ideType = "IDE_UNSPECIFIED", platform = "PLATFORM_UNSPECIFIED", pluginType = "GEMINI" } }, token);
         var projectValue = Get(loaded, "cloudaicompanionProject");
         project = projectValue.ValueKind == JsonValueKind.String ? projectValue.GetString() : String(projectValue, "id") ?? project;
-        if (string.IsNullOrWhiteSpace(project)) throw new UsageConnectionException("Gemini CLI 계정 설정 필요 · 로그인 후 다시 확인");
+        if (string.IsNullOrWhiteSpace(project)) throw new UsageConnectionException(UiText.Choose("Gemini CLI account setup required · sign in and try again", "Gemini CLI 계정 설정 필요 · 로그인 후 다시 확인"));
         var tier = Get(loaded, "paidTier");
         if (tier.ValueKind != JsonValueKind.Object) tier = Get(loaded, "currentTier");
         var quota = await PostAsync("retrieveUserQuota", access, new { project }, token);
@@ -102,12 +102,12 @@ public sealed class GeminiClient(HttpClient? http = null, string? credentialsPat
     async Task<string> RefreshAccessAsync(JsonElement credentials, CancellationToken token)
     {
         var refresh = String(credentials, "refresh_token");
-        if (string.IsNullOrWhiteSpace(refresh)) throw new UsageConnectionException("Gemini 로그인 만료 · Setting에서 다시 연결");
+        if (string.IsNullOrWhiteSpace(refresh)) throw new UsageConnectionException(UiText.Choose("Gemini login expired · reconnect in Settings", "Gemini 로그인 만료 · 설정에서 다시 연결"));
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://oauth2.googleapis.com/token") {
             Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["client_id"] = ClientId, ["client_secret"] = ClientSecret, ["refresh_token"] = refresh, ["grant_type"] = "refresh_token" })
         };
-        var result = await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, "Gemini 인증", token);
-        return String(result, "access_token") ?? throw new UsageConnectionException("Gemini 로그인 갱신 실패 · Setting에서 다시 연결");
+        var result = await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, UiText.Choose("Gemini authentication", "Gemini 인증"), token);
+        return String(result, "access_token") ?? throw new UsageConnectionException(UiText.Choose("Could not refresh Gemini login · reconnect in Settings", "Gemini 로그인 갱신 실패 · 설정에서 다시 연결"));
         // Never overwrite Gemini CLI credentials. Refreshed access tokens live only in memory.
     }
     async Task<JsonElement> PostAsync(string method, string access, object payload, CancellationToken token)
@@ -120,7 +120,7 @@ public sealed class GeminiClient(HttpClient? http = null, string? credentialsPat
     public static UsageEntry Parse(JsonElement result, string? plan, DateTimeOffset now)
     {
         var buckets = Get(result, "buckets");
-        if (buckets.ValueKind != JsonValueKind.Array) throw new UsageConnectionException("Gemini 모델 한도 응답 형식 확인 필요");
+        if (buckets.ValueKind != JsonValueKind.Array) throw new UsageConnectionException(UiText.Choose("Check the Gemini model quota response format", "Gemini 모델 한도 응답 형식 확인 필요"));
         var all = new List<UsageWindow>();
         foreach (var bucket in buckets.EnumerateArray()) {
             var model = String(bucket, "modelId");
@@ -136,6 +136,6 @@ public sealed class GeminiClient(HttpClient? http = null, string? credentialsPat
             if (match is not null && !selected.Any(x => x.Label == match.Label)) selected.Add(match);
         }
         foreach (var value in sorted) if (selected.Count < 2 && !selected.Any(x => x.Label == value.Label)) selected.Add(value);
-        return new("gemini", plan, Status: selected.Count == 0 ? "Gemini 모델 한도 데이터 없음" : null, UpdatedAt: now, Windows: selected.ToArray());
+        return new("gemini", plan, Status: selected.Count == 0 ? UiText.Choose("No Gemini model quota data", "Gemini 모델 한도 데이터 없음") : null, UpdatedAt: now, Windows: selected.ToArray());
     }
 }

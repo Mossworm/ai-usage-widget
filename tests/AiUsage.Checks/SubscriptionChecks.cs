@@ -22,7 +22,7 @@ static class SubscriptionChecks
         check(gemini.Windows[0].Reset?.Hour == 2 && gemini.Windows[1].Reset?.Hour == 3, "Gemini model reset times remain independent");
         var empty = GeminiClient.Parse(Json("""{"buckets":[{"modelId":"x","remainingFraction":2},{"modelId":"y","remainingAmount":"55"}]}"""), null, now);
         check(empty.Windows!.Length == 0 && empty.Status is not null, "Gemini invalid fractions or unknown total are not invented");
-        check(Labels.Windows(Catalog.Services.First(x => x.Id == "gemini"), null)[0].Label == "모델 한도", "Disconnected Gemini has honest model label");
+        check(Labels.Windows(Catalog.Services.First(x => x.Id == "gemini"), null)[0].Label == "Model quota", "Disconnected Gemini has honest model label");
         check(SubscriptionLogin.FromArgument("aiusage:login-claude") == "claude" && SubscriptionLogin.FromArgument("aiusage:login-gemini") == "gemini", "New protocol URLs route to correct login");
         check(SubscriptionLogin.FromArgument("aiusage:login-gemini?command=evil") is null, "Protocol does not accept arbitrary commands");
         using var card = JsonDocument.Parse(Card.Render(new() { Settings = true }, new(null, []), now));
@@ -64,7 +64,7 @@ static class SubscriptionChecks
             catch (UsageConnectionException e) { check(e.RetryAfter == TimeSpan.FromMinutes(20), "Server Retry-After preserved"); }
             using var denied = new HttpClient(new FakeHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("secret-server-error") })));
             try { await new ClaudeClient(denied, path).FetchAsync(); check(false, "401 must fail"); }
-            catch (UsageConnectionException e) { check(!e.Message.Contains("secret-server-error") && e.Message.Contains("다시 연결"), "Auth errors sanitized and actionable"); }
+            catch (UsageConnectionException e) { check(!e.Message.Contains("secret-server-error") && e.Message.Contains("reconnect"), "Auth errors sanitized and actionable"); }
 
             var geminiAuth = """{"access_token":"expired-token","refresh_token":"fake-google-refresh","expiry_date":1}""";
             await File.WriteAllTextAsync(path, geminiAuth);

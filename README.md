@@ -1,4 +1,4 @@
-# Agent Usage Widget
+# AI Usage Widget
 
 Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude·Gemini 로그인은 Setting에서 브라우저로 연결합니다.
 
@@ -7,6 +7,7 @@ Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니�
 - Gemini CLI: 이름·플랜, 모델별 사용률·리셋 시간, 진행 막대
 - API: 이번 달·오늘 비용(USD), 미확인 값은 `—`
 - Windows 라이트·다크 테마 자동 적용
+- 표시 언어는 영어가 기본이며 Windows UI 언어가 정확히 `ko-KR`일 때 한국어 적용
 - 위젯 설정은 Windows 위젯 호스트의 CustomState에 저장. 데스크톱 미리보기 설정은 별도로 저장
 - 위젯은 보이는 동안 30초마다 화면을 갱신하고, 미리보기는 15초마다 갱신. 자동 서버 조회 간격은 인스턴스당 Codex 2분, Claude·Gemini 5분. HTTP 429는 Retry-After에 따라 최소 5분 동안 재시도를 제한
 
@@ -80,7 +81,7 @@ powershell -ExecutionPolicy Bypass -File scripts/Build.ps1
 powershell -ExecutionPolicy Bypass -File scripts/Install-Dev.ps1
 ```
 
-이후 **Win + W → 위젯 추가 → Agent Usage**를 고정하세요. 작음·보통·큼 크기를 지원하며 모든 크기에 동일한 레이아웃을 사용하므로 작은 크기에서는 일부 내용이 잘릴 수 있습니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
+이후 **Win + W → 위젯 추가 → AI Usage**를 고정하세요. 작음·보통·큼 크기를 지원하며 모든 크기에 동일한 레이아웃을 사용하므로 작은 크기에서는 일부 내용이 잘릴 수 있습니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
 
 위젯 패널은 Windows가 Adaptive Card를 렌더링하므로 버튼·간격·모서리가 데스크톱 미리보기와 일부 다릅니다. 실제 패널에서의 최종 모양과 테마 전환은 설치 후 확인해야 합니다.
 

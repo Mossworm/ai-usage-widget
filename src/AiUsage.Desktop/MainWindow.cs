@@ -21,8 +21,8 @@ public sealed class MainWindow : Window
     readonly Preferences prefs;
     readonly UsageSnapshot demo = Catalog.Sample(DateTimeOffset.Now);
     readonly StackPanel content = new();
-    readonly Button status = new() { Content = "Status" };
-    readonly Button settings = new() { Content = "Setting" };
+    readonly Button status = new() { Content = UiText.Choose("Status", "상태") };
+    readonly Button settings = new() { Content = UiText.Choose("Settings", "설정") };
     readonly TextBlock footer = new() { FontSize = 11, TextAlignment = TextAlignment.Center, Margin = new(12, 10, 12, 12), TextWrapping = TextWrapping.Wrap };
     readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromSeconds(15) };
     public MainWindow(bool sample)
@@ -30,7 +30,7 @@ public sealed class MainWindow : Window
         this.sample = sample;
         prefs = sample ? new() : LocalStore.ReadPreferences();
         prefs.Settings = false;
-        Title = sample ? "Agent Usage · 샘플 미리보기" : "Agent Usage";
+        Title = sample ? UiText.Choose("AI Usage · Sample Preview", "AI Usage · 샘플 미리보기") : "AI Usage";
         Width = 382; Height = 626; MinWidth = 330; MinHeight = 350;
         FontFamily = new("Segoe UI"); FontSize = 13;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
@@ -63,10 +63,10 @@ public sealed class MainWindow : Window
     public async Task ConnectSubscriptionAsync(string id)
     {
         if (sample || loginPending) return;
-        loginPending = true; loginMessage = $"열린 브라우저에서 {SubscriptionLogin.Name(id)} 로그인을 완료해주세요."; Refresh();
+        loginPending = true; loginMessage = UiText.Choose($"Complete the {SubscriptionLogin.Name(id)} login in the browser window.", $"열린 브라우저에서 {SubscriptionLogin.Name(id)} 로그인을 완료해주세요."); Refresh();
         try { await SubscriptionLogin.ConnectAsync(id, lifetime.Token); loginMessage = null; }
-        catch (OperationCanceledException) { loginMessage = "로그인이 취소되었거나 시간이 초과되었습니다."; }
-        catch (Exception e) when (e is UsageConnectionException or CodexException or IOException or JsonException or System.ComponentModel.Win32Exception) { loginMessage = e is UsageConnectionException or CodexException ? e.Message : "로그인을 실행하지 못했습니다."; }
+        catch (OperationCanceledException) { loginMessage = UiText.Choose("Login was canceled or timed out.", "로그인이 취소되었거나 시간이 초과되었습니다."); }
+        catch (Exception e) when (e is UsageConnectionException or CodexException or IOException or JsonException or System.ComponentModel.Win32Exception) { loginMessage = e is UsageConnectionException or CodexException ? e.Message : UiText.Choose("Could not start login.", "로그인을 실행하지 못했습니다."); }
         finally { loginPending = false; }
         if (!lifetime.IsCancellationRequested) { await FetchUsageAsync(true); Refresh(); }
     }
@@ -100,11 +100,11 @@ public sealed class MainWindow : Window
             foreach (var service in Catalog.Services) {
                 var row = new DockPanel { Margin = new(23, 6, 25, 6) };
                 var toggle = new ToggleButton { IsChecked = prefs.Enabled.Contains(service.Id) };
-                AutomationProperties.SetName(toggle, service.Name + " 표시");
+                AutomationProperties.SetName(toggle, service.Name + UiText.Choose(" visibility", " 표시"));
                 toggle.Click += (_, _) => {
                     prefs.Toggle(service.Id);
                     if (!sample) try { LocalStore.SavePreferences(prefs); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-                        prefs.Toggle(service.Id); toggle.IsChecked = prefs.Enabled.Contains(service.Id); footer.Text = "설정을 저장하지 못했습니다. 다시 시도해주세요.";
+                        prefs.Toggle(service.Id); toggle.IsChecked = prefs.Enabled.Contains(service.Id); footer.Text = UiText.Choose("Could not save settings. Try again.", "설정을 저장하지 못했습니다. 다시 시도해주세요.");
                     }
                 };
                 DockPanel.SetDock(toggle, Dock.Right); row.Children.Add(toggle); row.Children.Add(Text(service.Name, size: 13)); content.Children.Add(row);
@@ -112,7 +112,7 @@ public sealed class MainWindow : Window
             if (!sample) {
                 var connections = new UniformGrid { Columns = 2, Margin = new(14, 8, 14, 0) };
                 foreach (var id in new[] { "chatgpt", "claude", "gemini" }) {
-                    var connect = new Button { Content = $"{SubscriptionLogin.Name(id)} 연결", Margin = new(6, 4, 6, 4), IsEnabled = !loginPending };
+                    var connect = new Button { Content = UiText.Choose($"Connect {SubscriptionLogin.Name(id)}", $"{SubscriptionLogin.Name(id)} 연결"), Margin = new(6, 4, 6, 4), IsEnabled = !loginPending };
                     connect.SetResourceReference(Button.BackgroundProperty, "Nav");
                     connect.Click += async (_, _) => await ConnectSubscriptionAsync(id);
                     connections.Children.Add(connect);
@@ -132,8 +132,8 @@ public sealed class MainWindow : Window
             var title = new WrapPanel();
             var name = Text(service.Name, size: 14); name.FontWeight = FontWeights.SemiBold; name.Margin = new(0, 0, 7, 4); title.Children.Add(name);
             var badge = new Border { Background = new SolidColorBrush(Color.FromArgb(28, iconColor.R, iconColor.G, iconColor.B)), CornerRadius = new(4), Padding = new(6, 2, 6, 2), Margin = new(0, 0, 0, 4) };
-            var label = Text(service.IsApi ? "API" : usage?.Plan ?? "미연결", size: 10); label.FontWeight = FontWeights.SemiBold; badge.Child = label; title.Children.Add(badge); stack.Children.Add(title);
-            if (service.IsApi) stack.Children.Add(Text($"이번 달 {Labels.Money(usage?.MonthCost)} · 오늘 {Labels.Money(usage?.DayCost)}", true));
+            var label = Text(service.IsApi ? "API" : usage?.Plan ?? UiText.Choose("Not connected", "미연결"), size: 10); label.FontWeight = FontWeights.SemiBold; badge.Child = label; title.Children.Add(badge); stack.Children.Add(title);
+            if (service.IsApi) stack.Children.Add(Text(UiText.Choose($"This month {Labels.Money(usage?.MonthCost)} · Today {Labels.Money(usage?.DayCost)}", $"이번 달 {Labels.Money(usage?.MonthCost)} · 오늘 {Labels.Money(usage?.DayCost)}"), true));
             else {
                 if (usage?.Status is not null) stack.Children.Add(Text(usage.Status, true));
                 else {
@@ -144,7 +144,7 @@ public sealed class MainWindow : Window
             }
             var border = new Border { Child = grid, BorderThickness = new(0, 0, 0, 1) }; border.SetResourceReference(Border.BorderBrushProperty, "Line"); content.Children.Add(border);
         }
-        if (prefs.Enabled.Count == 0) { var empty = Text("표시할 AI가 없습니다.\nSetting에서 서비스를 켜주세요.", true); empty.Margin = new(24, 40, 24, 40); content.Children.Add(empty); }
+        if (prefs.Enabled.Count == 0) { var empty = Text(UiText.Choose("No AI services to display.\nTurn on services in Settings.", "표시할 AI가 없습니다.\n설정에서 서비스를 켜주세요."), true); empty.Margin = new(24, 40, 24, 40); content.Children.Add(empty); }
     }
     FrameworkElement Progress(double? value, string color)
     {

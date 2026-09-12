@@ -17,14 +17,14 @@ public static class SubscriptionLogin
         if (id is not ("claude" or "gemini")) throw new ArgumentException("Unknown subscription");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         timeout.CancelAfter(TimeSpan.FromMinutes(5));
-        using var process = Process.Start(StartInfo(id)) ?? throw new UsageConnectionException($"{Name(id)} 로그인 실행 실패");
+        using var process = Process.Start(StartInfo(id)) ?? throw new UsageConnectionException(UiText.Choose($"Could not start {Name(id)} login", $"{Name(id)} 로그인 실행 실패"));
         var errorDrain = DrainAsync(process.StandardError, timeout.Token);
         Task? outputDrain = null;
         try {
             if (id == "claude") {
                 outputDrain = DrainAsync(process.StandardOutput, timeout.Token);
                 await process.WaitForExitAsync(timeout.Token);
-                if (process.ExitCode != 0) throw new UsageConnectionException("Claude 로그인 미완료 · 다시 연결해주세요");
+                if (process.ExitCode != 0) throw new UsageConnectionException(UiText.Choose("Claude login did not complete · try connecting again", "Claude 로그인 미완료 · 다시 연결해주세요"));
             } else {
                 await RequestAsync(process, 1, "initialize", new { protocolVersion = 1, clientCapabilities = new { }, clientInfo = new { name = "ai-usage-widget", version = "1.2.0" } }, timeout.Token);
                 await RequestAsync(process, 2, "authenticate", new { methodId = "oauth-personal" }, timeout.Token);
@@ -38,7 +38,7 @@ public static class SubscriptionLogin
     static IEnumerable<string> Folders() => (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
         .Concat([Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin")])
         .Where(Path.IsPathFullyQualified).Distinct(StringComparer.OrdinalIgnoreCase);
-    static string FindFile(IEnumerable<string> paths, string name) => paths.FirstOrDefault(File.Exists) ?? throw new UsageConnectionException($"{name} CLI 설치 필요 · README의 설치 명령을 실행해주세요");
+    static string FindFile(IEnumerable<string> paths, string name) => paths.FirstOrDefault(File.Exists) ?? throw new UsageConnectionException(UiText.Choose($"{name} CLI must be installed · run the install command in README", $"{name} CLI 설치 필요 · README의 설치 명령을 실행해주세요"));
     static ProcessStartInfo StartInfo(string id)
     {
         var folders = Folders().ToArray();
@@ -63,11 +63,11 @@ public static class SubscriptionLogin
         await process.StandardInput.FlushAsync(token);
         while (true) {
             var line = await process.StandardOutput.ReadLineAsync(token);
-            if (line is null) throw new UsageConnectionException("Gemini 로그인 연결이 종료되었습니다");
+            if (line is null) throw new UsageConnectionException(UiText.Choose("The Gemini login connection closed", "Gemini 로그인 연결이 종료되었습니다"));
             using var doc = JsonDocument.Parse(line);
             var responseId = CodexClient.Get(doc.RootElement, "id");
             if (responseId.ValueKind != JsonValueKind.Number || !responseId.TryGetInt32(out var number) || number != id) continue;
-            if (doc.RootElement.TryGetProperty("error", out _)) throw new UsageConnectionException("Gemini 로그인 미완료 · 다시 연결해주세요");
+            if (doc.RootElement.TryGetProperty("error", out _)) throw new UsageConnectionException(UiText.Choose("Gemini login did not complete · try connecting again", "Gemini 로그인 미완료 · 다시 연결해주세요"));
             return;
         }
     }

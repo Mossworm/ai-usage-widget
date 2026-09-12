@@ -1,5 +1,8 @@
 using AiUsage;
+using System.Globalization;
 using System.Text.Json;
+
+CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 
 if (args.Contains("--live")) {
     try {
@@ -50,18 +53,28 @@ using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     Check(body[4].GetProperty("selectAction").GetProperty("verb").GetString() == "toggle:claude", "Setting row targets correct service");
 }
 prefs.Settings = false; prefs.Enabled.Clear();
-using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) Check(doc.RootElement.GetProperty("body")[1].GetProperty("text").GetString()!.Contains("표시할 AI가 없습니다"), "All-disabled empty state");
+using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) Check(doc.RootElement.GetProperty("body")[1].GetProperty("text").GetString()!.Contains("No AI services to display"), "All-disabled empty state");
 Check(Labels.Percent(null) == "—", "Unknown usage is not shown as zero");
 Check(Labels.Percent(100) == "0%" && Labels.Percent(0) == "100%", "Exhausted quota is zero remaining");
 Check(Labels.Percent(130) == "0%" && Labels.Percent(-1) == "100%", "Remaining progress values bounded");
 Check(Labels.Percent(double.NaN) == "—", "Nonfinite usage rejected");
 Check(Labels.Money(null) == "—" && Labels.Money(-1) == "—", "Unknown or invalid cost not shown as zero");
 Check(Labels.Money(0) == "$0.00", "Known zero cost distinct from unknown");
-Check(Labels.Reset(now.AddMinutes(-1), now) == "리셋 확인 대기", "Expired reset never becomes negative countdown");
-Check(Labels.Reset(now.AddMinutes(162), now) == "2시간 42분 후 리셋", "Countdown computed from timestamp");
+Check(Labels.Reset(now.AddMinutes(-1), now) == "Waiting for reset", "Expired reset never becomes negative countdown");
+Check(Labels.Reset(now.AddMinutes(162), now) == "Resets in 2h 42m", "Countdown computed from timestamp");
 Check(Labels.Reset(now.AddDays(7), now).Contains("/"), "Long reset date uses slash separator");
-Check(Labels.Footer(new(null, []), now).Contains("연결 대기"), "Disconnected footer");
-Check(Labels.Footer(new(now.AddHours(-1), []), now).Contains("오래된 데이터"), "Stale data is indicated");
+Check(Labels.Footer(new(null, []), now).Contains("Waiting for connection"), "Disconnected footer");
+Check(Labels.Footer(new(now.AddHours(-1), []), now).Contains("stale data"), "Stale data is indicated");
+CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("ko-KR");
+Check(Labels.Reset(now.AddMinutes(162), now) == "2시간 42분 후 리셋", "ko-KR selects Korean translation");
+using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
+    var body = doc.RootElement.GetProperty("body");
+    Check(body[0].GetProperty("actions")[0].GetProperty("title").GetString()!.Contains("상태")
+        && body[1].GetProperty("text").GetString()!.Contains("표시할 AI가 없습니다"), "ko-KR localizes widget navigation and content");
+}
+CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-GB");
+Check(Labels.Reset(now.AddMinutes(162), now) == "Resets in 2h 42m", "Non-ko-KR locale falls back to English");
+CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
 var dir = Path.Combine(Path.GetTempPath(), "AiUsageChecks-" + Guid.NewGuid().ToString("N"));
 Directory.CreateDirectory(dir);
 try {

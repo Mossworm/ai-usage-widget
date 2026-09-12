@@ -13,6 +13,7 @@ foreach ($name in @('Desktop', 'Provider')) {
 }
 & (Join-Path $PSScriptRoot 'New-Assets.ps1') -Destination (Join-Path $stage 'Assets')
 Copy-Item -LiteralPath (Join-Path $projectRoot 'packaging\AppxManifest.xml') -Destination $stage
+Copy-Item -LiteralPath (Join-Path $projectRoot 'packaging\Strings') -Destination $stage -Recurse -Force
 # WinRT resolves widget interface metadata from the package root when the host
 # marshals provider callbacks. Keeping it only beside the EXE fails with 0x8000000F.
 Copy-Item -LiteralPath (Join-Path $stage 'Provider\Microsoft.Windows.Widgets.winmd') -Destination $stage
@@ -23,6 +24,8 @@ $process = Start-Process -FilePath $exe -ArgumentList @('--sample', '--render', 
 if ($process.ExitCode -ne 0) { throw 'Preview rendering failed' }
 $sdk = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin' -Directory | Where-Object { Test-Path (Join-Path $_.FullName 'x64\makeappx.exe') } | Sort-Object Name -Descending | Select-Object -First 1
 if (-not $sdk) { throw 'Windows SDK makeappx.exe is required.' }
+& (Join-Path $sdk.FullName 'x64\makepri.exe') new /pr $stage /cf (Join-Path $projectRoot 'packaging\priconfig.xml') /of (Join-Path $stage 'resources.pri') /o
+if ($LASTEXITCODE -ne 0) { throw 'Resource indexing failed' }
 & (Join-Path $sdk.FullName 'x64\makeappx.exe') pack /d $stage /p (Join-Path $output 'AiUsageWidget.msix') /o | Out-File (Join-Path $output 'packaging.log')
 if ($LASTEXITCODE -ne 0) { throw 'MSIX packaging failed' }
 Write-Host "Built: $output\AiUsageWidget.msix"
