@@ -2,6 +2,7 @@
 [CmdletBinding()]
 param(
     [switch]$BuildOnly,
+    [switch]$Msix,
     [ValidateSet('Debug', 'Release')][string]$Configuration = 'Release'
 )
 
@@ -12,7 +13,8 @@ $artifacts = Join-Path $repo 'artifacts'
 $build = Join-Path $artifacts 'publish'
 $stage = Join-Path $build 'package'
 $package = Join-Path $artifacts 'package'
-$backup = Join-Path $build 'previous-package'
+$backup = Join-Path $build ('previous-package-' + [Guid]::NewGuid().ToString('N'))
+$install = !$BuildOnly -and !$Msix
 $buildLock = $null
 
 function Invoke-Checked([string]$Command, [string[]]$Arguments) {
@@ -69,11 +71,12 @@ try {
     try { $buildLock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None') }
     catch { throw "Cannot acquire build lock. Another build may be running: $lockPath. $($_.Exception.Message)" }
 
-    if (Test-Path -LiteralPath $build) { Remove-Item -LiteralPath $build -Recurse -Force }
+    # Recreate only staging; previous installation backups must survive later builds.
+    if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
     New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
     $installed = $null
-    if (!$BuildOnly) {
+    if ($install) {
         $developerMode = Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -ErrorAction SilentlyContinue
         if (!$developerMode -or !$developerMode.PSObject.Properties['AllowDevelopmentWithoutDevLicense'] -or $developerMode.AllowDevelopmentWithoutDevLicense -ne 1) {
             throw 'Enable Windows Developer Mode in Settings, then run this script again.'
@@ -121,10 +124,22 @@ try {
     }
     Write-Host "Packaging (logs: $build)..."
     Invoke-Checked (Join-Path $sdk.FullName 'x64\makepri.exe') @('new', '/pr', $stage, '/cf', (Join-Path $repo 'packaging\priconfig.xml'), '/of', (Join-Path $stage 'resources.pri'), '/o') > (Join-Path $build 'resources.log')
-    $msix = Join-Path $build 'AiUsageWidget.msix'
-    Invoke-Checked (Join-Path $sdk.FullName 'x64\makeappx.exe') @('pack', '/d', $stage, '/p', $msix, '/o') > (Join-Path $build 'packaging.log')
-    if ($BuildOnly) {
-        Write-Host "Build and checks succeeded: $msix"
+    $stagedMsix = Join-Path $build 'AiUsageWidget.msix'
+    Assert-ArtifactPath $stagedMsix
+    Invoke-Checked (Join-Path $sdk.FullName 'x64\makeappx.exe') @('pack', '/d', $stage, '/p', $stagedMsix, '/o') > (Join-Path $build 'packaging.log')
+    $msixName = '{0}_{1}_{2}.msix' -f $identity, $manifest.Package.Identity.Version, $manifest.Package.Identity.ProcessorArchitecture
+    $msixDirectory = Join-Path $artifacts 'msix'
+    $msixPath = Join-Path $msixDirectory $msixName
+    $latestMsix = Join-Path $artifacts 'AiUsageWidget.msix'
+    Assert-ArtifactPath $msixPath
+    Assert-ArtifactPath $latestMsix
+    New-Item -ItemType Directory -Path $msixDirectory -Force | Out-Null
+    Copy-Item -LiteralPath $stagedMsix -Destination $msixPath -Force
+    Copy-Item -LiteralPath $stagedMsix -Destination $latestMsix -Force
+    Write-Host "Unsigned MSIX package: $msixPath"
+    Write-Host "Latest package: $latestMsix"
+    if (!$install) {
+        Write-Host "Build and checks succeeded: $msixPath"
         return
     }
 
@@ -187,12 +202,6 @@ try {
         catch { Write-Warning "Rollback failed: $($_.Exception.Message). Previous files: $backup. Build files: $build" }
         throw $failure
     }
-    # Keep a convenience copy at the artifacts root for existing workflows.
-    try {
-        Assert-ArtifactPath (Join-Path $artifacts 'AiUsageWidget.msix')
-        Copy-Item -LiteralPath $msix -Destination (Join-Path $artifacts 'AiUsageWidget.msix') -Force
-    }
-    catch { Write-Warning "Installed successfully, but could not update artifacts/AiUsageWidget.msix. Use $msix. $($_.Exception.Message)" }
     Write-Host "Installed successfully: $($registered.PackageFullName)"
     Write-Host 'Open Win + W and add the AI Usage widget if needed.'
     if ($oldMoved) { Write-Host "Previous files: $backup" }

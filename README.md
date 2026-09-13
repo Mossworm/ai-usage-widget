@@ -82,13 +82,18 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1
 # 설치하지 않고 빌드·검증·패키징만 실행
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -BuildOnly
 
+# MSIX 생성 전용 명령 (설치 생략, -BuildOnly와 동일)
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Msix
+
 # Debug 구성으로 빌드·검증·설치
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Configuration Debug
 ```
 
-빌드 결과는 `artifacts/publish/`에 생성되며, 매 실행 전에 기존 폴더를 비워 MSIX와 패키징 로그(`resources.log`, `packaging.log`)를 최신 결과만 남깁니다. `-BuildOnly`는 해당 폴더에만 결과를 만들고 기존 설치를 교체하지 않습니다. 설치 성공 시 실행 파일은 `artifacts/package`, 최신 MSIX 사본은 `artifacts/AiUsageWidget.msix`에 둡니다. MSIX는 서명되지 않으며 개발 설치는 매니페스트 등록 방식입니다.
+기본 실행, `-BuildOnly`, `-Msix` 모두 빌드·검증 후 `artifacts/msix/<패키지 이름>_<버전>_<아키텍처>.msix`를 생성합니다. 현재 매니페스트 기준 파일명은 `Mossworm.AiUsageWidget_1.2.4.0_x64.msix`입니다. 최신 패키지는 `artifacts/AiUsageWidget.msix`에도 복사합니다. 같은 버전은 덮어쓰고 다른 버전의 MSIX는 보존합니다. MSIX는 서명되지 않으며 개발 설치는 매니페스트 등록 방식입니다.
 
-검증 완료 후 이 저장소의 실행 중인 Desktop·Provider를 종료하고 패키지를 교체합니다. 이전 `artifacts/package` 파일은 `artifacts/publish/previous-package`에 보관하며, 등록 또는 활성화 실패 시 이전 파일과 등록을 복구합니다. 기존 설치가 이 저장소의 `artifacts/버전/package`에 있으면 원래 파일을 보존하고, 기존 개발 등록을 제거한 뒤 `artifacts/package`로 다시 등록합니다. 경로 전환 시 위젯 패널에서 AI Usage를 다시 추가해야 할 수 있습니다. 복구까지 실패하면 경고에 표시된 경로와 오류를 확인하세요. `%LOCALAPPDATA%/AiUsageWidget`의 사용자 설정은 유지합니다. 서명된 설치나 이 저장소의 `artifacts` 밖에 있는 개발 등록은 교체하지 않고 중단합니다. 같은 저장소에서 스크립트를 동시에 실행할 수 없습니다.
+게시 파일과 패키징 로그(`resources.log`, `packaging.log`)는 `artifacts/publish/`에 생성됩니다. 매 실행 전에 준비 폴더 `artifacts/publish/package`만 비우고, MSIX와 로그는 최신 결과로 갱신합니다. `-BuildOnly`와 `-Msix`는 기존 설치를 교체하지 않으며 개발자 모드가 필요하지 않습니다. 기본 실행은 패키지 생성 후 설치까지 진행하며, 설치 성공 시 실행 파일은 `artifacts/package`에 둡니다.
+
+검증 완료 후 이 저장소의 실행 중인 Desktop·Provider를 종료하고 패키지를 교체합니다. 이전 `artifacts/package` 파일은 `artifacts/publish/previous-package-<고유 ID>`에 보관하며, 이후 빌드에서도 기존 백업을 보존합니다. 등록 또는 활성화 실패 시 이전 파일과 등록을 복구합니다. 기존 설치가 이 저장소의 `artifacts/버전/package`에 있으면 원래 파일을 보존하고, 기존 개발 등록을 제거한 뒤 `artifacts/package`로 다시 등록합니다. 경로 전환 시 위젯 패널에서 AI Usage를 다시 추가해야 할 수 있습니다. 복구까지 실패하면 경고에 표시된 경로와 오류를 확인하세요. `%LOCALAPPDATA%/AiUsageWidget`의 사용자 설정은 유지합니다. 서명된 설치나 이 저장소의 `artifacts` 밖에 있는 개발 등록은 교체하지 않고 중단합니다. 같은 저장소에서 스크립트를 동시에 실행할 수 없습니다.
 
 이후 **Win + W → 위젯 추가 → AI Usage**를 고정하세요. 작음·보통·큼 크기를 지원하며 모든 크기에 동일한 레이아웃을 사용하므로 작은 크기에서는 일부 내용이 잘릴 수 있습니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
 
