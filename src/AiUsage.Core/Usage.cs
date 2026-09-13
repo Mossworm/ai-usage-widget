@@ -17,7 +17,6 @@ public static class Catalog
         new("chatgpt", "Codex", false, "#10A586"),
         new("claude", "Claude Code", false, "#D87959"),
         new("antigravity", "Antigravity", false, "#4385EF"),
-        new("cursor", "Cursor", false, "#737983"),
         new("opencode", "OpenCode", false, "#737983"),
         new("commandcode", "Command Code", false, "#8B5CF6")
     ];
@@ -25,7 +24,6 @@ public static class Catalog
         new("chatgpt", "Plus", 23, now.AddHours(3).AddMinutes(12), 38, now.AddDays(4)),
         new("claude", "Max", 7, now.AddHours(2).AddMinutes(42), 14, now.AddDays(3)),
         new("antigravity", "Google AI Pro", Windows: [new("Gemini Models", 18, now.AddHours(4)), new("Claude + GPT", 32, now.AddDays(2))]),
-        new("cursor", "Pro", 27, now.AddDays(5), Windows: [new("Included", 27, now.AddDays(5))]),
         new("opencode", "Go", 11, now.AddHours(5), 24, now.AddDays(6)),
         new("commandcode", "Go", 12, now.AddHours(4), 31, now.AddDays(3), Windows: [new("Monthly credits", 18, now.AddDays(3))])
     ], true);

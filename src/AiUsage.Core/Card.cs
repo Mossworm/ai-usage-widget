@@ -28,7 +28,6 @@ public static class Card
                                 "chatgpt" => "aiusage:login",
                                 "claude" => "aiusage:login-claude",
                                 "antigravity" => "aiusage:login-antigravity",
-                                "cursor" => "aiusage:login-cursor",
                                 "opencode" => "aiusage:login-opencode",
                                 "commandcode" => "aiusage:login-commandcode",
                                 _ => "https://example.invalid"

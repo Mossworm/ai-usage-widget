@@ -10,7 +10,6 @@ public static class SubscriptionLogin
         "--login" or "aiusage:login" => "chatgpt",
         "--login-claude" or "aiusage:login-claude" => "claude",
         "aiusage:login-antigravity" => "antigravity",
-        "aiusage:login-cursor" => "cursor",
         "aiusage:login-opencode" => "opencode",
         "aiusage:login-commandcode" => "commandcode", _ => null
     };
@@ -20,7 +19,6 @@ public static class SubscriptionLogin
         if (id == "antigravity") { StartAntigravity(); return; }
         if (id != "claude") {
             var url = id switch {
-                "cursor" => "https://cursor.com/login",
                 "opencode" => "https://opencode.ai/auth",
                 "commandcode" => "https://commandcode.ai/",
                 _ => throw new ArgumentException("Unknown subscription")

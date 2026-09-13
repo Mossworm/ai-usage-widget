@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Data.Sqlite;
 using static AiUsage.CodexClient;
 
 namespace AiUsage;
@@ -136,46 +135,6 @@ public sealed class AntigravityClient(HttpClient? http = null, string? credentia
             return fraction.TryNumber(out var value) && value is >= 0 and <= 1 ? new UsageWindow(label, (1 - value) * 100, UsageHttp.Date(bucket, "resetTime")) : null;
         }).OfType<UsageWindow>().Take(4).ToArray();
         return new("antigravity", plan, Status: windows.Length == 0 ? "No Antigravity quota data" : null, UpdatedAt: now, Windows: windows);
-    }
-}
-
-public sealed class CursorClient(HttpClient? http = null)
-{
-    public async Task<UsageEntry> FetchAsync(CancellationToken cancellation = default)
-    {
-        var credential = Environment.GetEnvironmentVariable("CURSOR_COOKIE");
-        if (string.IsNullOrWhiteSpace(credential)) credential = await ReadAccessTokenAsync(cancellation);
-        if (string.IsNullOrWhiteSpace(credential)) throw new UsageConnectionException("Cursor login required · sign in to Cursor or set CURSOR_COOKIE");
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://cursor.com/api/usage-summary");
-        request.Headers.Accept.ParseAdd("application/json");
-        request.Headers.Add("Cookie", credential.Contains('=') ? credential : "WorkosCursorSessionToken=" + credential);
-        var result = await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, "Cursor", cancellation);
-        return Parse(result, DateTimeOffset.Now);
-    }
-    static async Task<string?> ReadAccessTokenAsync(CancellationToken token)
-    {
-        var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Cursor", "User", "globalStorage", "state.vscdb");
-        if (!File.Exists(path)) return null;
-        try {
-            await Task.Yield();
-            using var connection = new SqliteConnection($"Data Source={path};Mode=ReadOnly");
-            connection.Open();
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT value FROM ItemTable WHERE key = 'cursorAuth/accessToken' LIMIT 1";
-            var value = await command.ExecuteScalarAsync(token);
-            return value switch { byte[] bytes => Encoding.UTF8.GetString(bytes).Trim('\0'), _ => value?.ToString() };
-        } catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { return null; }
-    }
-    public static UsageEntry Parse(JsonElement result, DateTimeOffset now)
-    {
-        var plan = Get(Get(result, "individualUsage"), "plan");
-        var percent = Get(plan, "totalPercentUsed");
-        if (!percent.TryNumber(out var used)) {
-            var usedValue = Get(plan, "used"); var limit = Get(plan, "limit");
-            used = usedValue.TryNumber(out var u) && limit.TryNumber(out var l) && l > 0 ? u / l * 100 : double.NaN;
-        }
-        var reset = UsageHttp.Date(result, "billingCycleEnd");
-        return new("cursor", String(result, "membershipType") ?? "Cursor", double.IsFinite(used) ? used : null, reset, Status: double.IsFinite(used) ? null : "No Cursor quota data", UpdatedAt: now);
     }
 }
 

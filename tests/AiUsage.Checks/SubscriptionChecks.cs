@@ -16,13 +16,11 @@ static class SubscriptionChecks
         var invalid = ClaudeClient.Parse(Json("""{"five_hour":{"utilization":101,"resets_at":"invalid"},"seven_day":null}"""), null, now);
         check(invalid.SessionPercent is null && invalid.SessionReset is null, "Claude invalid fields rejected");
         check(SubscriptionLogin.FromArgument("aiusage:login-claude") == "claude", "Claude protocol URL routes to Claude login");
-        check(SubscriptionLogin.FromArgument("aiusage:login-antigravity") == "antigravity" && SubscriptionLogin.FromArgument("aiusage:login-cursor") == "cursor" && SubscriptionLogin.FromArgument("aiusage:login-opencode") == "opencode" && SubscriptionLogin.FromArgument("aiusage:login-commandcode") == "commandcode", "New providers route to browser login actions");
+        check(SubscriptionLogin.FromArgument("aiusage:login-antigravity") == "antigravity" && SubscriptionLogin.FromArgument("aiusage:login-opencode") == "opencode" && SubscriptionLogin.FromArgument("aiusage:login-commandcode") == "commandcode", "New providers route to browser login actions");
         check(SubscriptionLogin.FromArgument("aiusage:login-gemini") is null, "Removed provider protocol URL is rejected");
         check(SubscriptionLogin.FromArgument("aiusage:login-gemini?command=evil") is null, "Protocol does not accept arbitrary commands");
         var antigravity = AntigravityClient.Parse(Json("""{"buckets":[{"modelId":"gemini-pro","remainingFraction":0.8,"resetTime":"2026-09-13T16:00:00Z"},{"modelId":"claude-sonnet","remainingFraction":0.5,"resetTime":"2026-09-14T12:00:00Z"}]}"""), "Google AI Pro", now);
         check(antigravity.Id == "antigravity" && antigravity.Windows?.Length == 2 && Math.Abs(antigravity.Windows[0].Percent!.Value - 20) < 0.001, "Antigravity model quota maps to named windows");
-        var cursor = CursorClient.Parse(Json("""{"membershipType":"pro","billingCycleEnd":"2026-10-01T00:00:00Z","individualUsage":{"plan":{"used":1500,"limit":5000,"totalPercentUsed":30}}}"""), now);
-        check(cursor.Id == "cursor" && cursor.SessionPercent == 30 && cursor.SessionReset?.Month == 10, "Cursor usage summary maps included usage and billing reset");
         var opencode = OpenCodeClient.Parse(Json("""{"usage":{"rolling":{"usagePercent":25,"resetInSec":600},"weekly":{"usagePercent":40,"resetInSec":3600}}}"""), now);
         check(opencode.Id == "opencode" && opencode.SessionPercent == 25 && opencode.WeeklyPercent == 40 && opencode.SessionReset == now.AddMinutes(10), "OpenCode usage API maps rolling and weekly windows");
         var commandCode = CommandCodeClient.Parse(Json("""{"credits":{"monthlyCredits":8.7784}}"""), Json("""{"success":true,"data":{"planId":"individual-go","currentPeriodEnd":"2026-10-01T00:00:00Z"}}"""), now);
