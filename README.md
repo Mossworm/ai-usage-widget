@@ -2,14 +2,14 @@
 
 Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude Code 로그인은 Setting에서 브라우저로 연결합니다.
 
-- Codex, Claude Code 표시 토글
-- Codex·Claude Code: 이름·플랜, 5시간 사용률·리셋 시간, 주간 사용률·리셋 시간, 진행 막대
+- Codex, Claude Code, Antigravity, Cursor, OpenCode, Command Code 표시 토글
+- 각 제공자: 이름·플랜, 제공자가 보고한 사용률·리셋 시간, 진행 막대
 - Windows 라이트·다크 테마 자동 적용
 - 표시 언어는 Windows UI 언어와 관계없이 영어만 지원
 - 위젯 설정은 Windows 위젯 호스트의 CustomState에 저장. 데스크톱 미리보기 설정은 별도로 저장
 - 위젯은 보이는 동안 30초마다 화면을 갱신하고, 미리보기는 15초마다 갱신. 자동 서버 조회 간격은 인스턴스당 Codex 2분, Claude Code 5분. HTTP 429는 Retry-After에 따라 최소 5분 동안 재시도를 제한
 
-**Codex와 Claude Code의 로그인 기반 사용량 조회를 지원합니다.** Codex는 일반 ChatGPT 대화 한도가 아니라 Codex 한도입니다. 기존 설정 호환을 위해 서비스 ID는 `chatgpt`, `claude`를 유지합니다.
+**Codex, Claude Code, Antigravity, Cursor, OpenCode, Command Code 사용량 조회를 지원합니다.** Codex는 일반 ChatGPT 대화 한도가 아니라 Codex 한도입니다. 기존 설정 호환을 위해 서비스 ID `chatgpt`, `claude`를 유지합니다.
 
 샘플 실행은 네트워크 조회·로그인·설정 저장을 하지 않으며 화면 하단에 샘플임을 표시합니다. 샘플 플랜과 수치는 레이아웃 확인용입니다.
 
@@ -51,6 +51,17 @@ Claude 조회는 `%USERPROFILE%/.claude/.credentials.json`의 구독 OAuth 정�
 Claude의 OAuth 사용량 경로는 공개 결제 API가 아닌 CLI 서비스 경로라 변경될 수 있습니다. 조회 실패·로그인 만료·429는 서비스별 상태로 표시하며 다른 서비스 갱신을 막지 않습니다. 위젯은 비밀번호 입력을 받지 않고, 읽은 토큰·계정 식별자를 사용량 데이터나 로그에 기록하지 않습니다.
 
 참고: [Claude 공식 인증·저장 위치](https://code.claude.com/docs/en/authentication), [Claude 저장소의 OAuth 사용량 응답 보고](https://github.com/anthropics/claude-code/issues/31021)
+
+### Antigravity, Cursor, OpenCode 연결
+
+CodexBar 문서의 provider API 경로를 사용합니다. 앱은 비밀값을 저장하지 않고 현재 프로세스 환경 변수와 읽기 전용 로컬 credential 파일만 사용합니다.
+
+- **Antigravity**: `Connect`는 일반 Google 계정 페이지가 아니라 설치된 `agy.exe` 또는 `antigravity.exe`를 실행합니다. Antigravity 앱/CLI에서 로그인하면 `~/.codexbar/antigravity/oauth_creds.json` 또는 `%USERPROFILE%/.gemini/oauth_creds.json`의 Google OAuth credential로 Code Assist `loadCodeAssist`와 `retrieveUserQuota`를 호출합니다. 다른 위치의 credential은 `ANTIGRAVITY_OAUTH_CREDENTIALS_JSON`에 JSON 전체를 지정할 수 있습니다. `GOOGLE_CLOUD_PROJECT` 또는 `GOOGLE_CLOUD_PROJECT_ID`가 필요할 수 있습니다.
+- **Cursor**: `%APPDATA%/Cursor/User/globalStorage/state.vscdb`의 `cursorAuth/accessToken`을 읽어 `https://cursor.com/api/usage-summary`를 호출합니다. 수동 인증은 `CURSOR_COOKIE`에 `Cookie` 헤더 값을 지정할 수 있습니다.
+- **OpenCode**: OpenCode Go API `https://opencode.ai/zen/go/v1/usage`를 호출합니다. API 키를 `OPENCODE_API_KEY`에 지정하면 rolling 5시간과 weekly 사용량을 읽습니다.
+- **Command Code**: `COMMANDCODE_COOKIE`의 브라우저 `Cookie` 헤더로 `api.commandcode.ai/internal/billing/credits`와 subscription billing endpoint를 호출합니다. 먼저 [commandcode.ai](https://commandcode.ai)에 로그인한 뒤 Cookie 헤더를 지정하세요.
+
+네 서비스의 `Connect` 버튼은 Antigravity는 앱/CLI를 실행하고, 나머지는 각 로그인 페이지를 기본 브라우저에서 엽니다. 로그인 후 앱을 새로고침하면 로컬 credential 또는 환경 변수/쿠키를 사용해 자동 조회합니다.
 
 빌드 결과가 있으면 `artifacts/package/Desktop/AiUsage.Desktop.exe`를 실행하세요. 이 실행 파일은 데스크톱 미리보기이며 위젯 패널 등록은 아래 단계가 필요합니다.
 
@@ -113,7 +124,7 @@ dotnet run --project tests/AiUsage.Checks
 
 `Customize widget` 메뉴가 열려도 설정 화면으로 바뀌지 않는다면 패키지 매니페스트의 `IWidgetProvider2` 프록시 등록을 확인하세요. 이 프로젝트는 MSIX를 직접 조립하므로 Windows App SDK의 `package.appxfragment`에 있는 사용자 지정 콜백 프록시를 데스크톱 COM용 `windows.comInterface` 형식으로 `packaging/AppxManifest.xml`에 명시합니다. `IsCustomizable`과 C# 인터페이스 구현만으로는 프로세스 간 콜백 전달이 되지 않습니다. [COM 인터페이스 등록 문서](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-com-cominterface)를 참고하세요. 매니페스트 변경 후에는 패키지 버전을 올리고, `build-install.ps1`을 실행해 빌드·검증 후 패키지를 다시 등록해야 합니다.
 
-현재 검증 결과: Codex·Claude Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사 60개 통과. Codex는 실제 계정 조회를 검증했습니다. Claude Code의 실제 로그인 완료 및 라이브 사용량 조회는 별도 실행이 필요합니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
+현재 검증 결과: Codex·Claude Code·Antigravity·Cursor·OpenCode·Command Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사 65개 통과. Codex는 실제 계정 조회를 검증했습니다. 다른 제공자의 실제 로그인 및 라이브 사용량 조회는 별도 실행이 필요합니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
 
 v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 완료했습니다. 샘플 Status와 로그인 버튼이 포함된 실제 Setting의 라이트·다크 PNG도 확인했습니다.
 

@@ -16,7 +16,11 @@ public sealed class SubscriptionFeed
     }
     readonly Dictionary<string, Slot> slots = new() {
         ["chatgpt"] = new("chatgpt", new CodexClient().FetchAsync, TimeSpan.FromMinutes(2)),
-        ["claude"] = new("claude", new ClaudeClient().FetchAsync, TimeSpan.FromMinutes(5))
+        ["claude"] = new("claude", new ClaudeClient().FetchAsync, TimeSpan.FromMinutes(5)),
+        ["antigravity"] = new("antigravity", new AntigravityClient().FetchAsync, TimeSpan.FromMinutes(5)),
+        ["cursor"] = new("cursor", new CursorClient().FetchAsync, TimeSpan.FromMinutes(5)),
+        ["opencode"] = new("opencode", new OpenCodeClient().FetchAsync, TimeSpan.FromMinutes(5)),
+        ["commandcode"] = new("commandcode", new CommandCodeClient().FetchAsync, TimeSpan.FromMinutes(5))
     };
     public UsageSnapshot Read(IReadOnlySet<string> enabled)
     {

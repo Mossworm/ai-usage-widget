@@ -24,7 +24,15 @@ public static class Card
                     columns = new[] {
                         Column([Text(service.Name)]),
                         !data.IsSample ? Column([new { type = "ActionSet", actions = new[] {
-                            new { type = "Action.OpenUrl", title = "Connect", url = service.Id == "chatgpt" ? "aiusage:login" : "aiusage:login-claude" }
+                            new { type = "Action.OpenUrl", title = "Connect", url = service.Id switch {
+                                "chatgpt" => "aiusage:login",
+                                "claude" => "aiusage:login-claude",
+                                "antigravity" => "aiusage:login-antigravity",
+                                "cursor" => "aiusage:login-cursor",
+                                "opencode" => "aiusage:login-opencode",
+                                "commandcode" => "aiusage:login-commandcode",
+                                _ => "https://example.invalid"
+                            } }
                         } }], "auto") : Column([]),
                         Column([new { type = "Image", url = ToggleImage(enabled), width = "34px", height = "20px", altText = enabled ? "On" : "Off" }], "auto")
                     }

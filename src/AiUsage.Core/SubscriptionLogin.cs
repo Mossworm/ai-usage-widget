@@ -8,12 +8,26 @@ public static class SubscriptionLogin
         ?? throw new ArgumentException("Unknown subscription");
     public static string? FromArgument(string argument) => argument.ToLowerInvariant() switch {
         "--login" or "aiusage:login" => "chatgpt",
-        "--login-claude" or "aiusage:login-claude" => "claude", _ => null
+        "--login-claude" or "aiusage:login-claude" => "claude",
+        "aiusage:login-antigravity" => "antigravity",
+        "aiusage:login-cursor" => "cursor",
+        "aiusage:login-opencode" => "opencode",
+        "aiusage:login-commandcode" => "commandcode", _ => null
     };
     public static async Task ConnectAsync(string id, CancellationToken cancellation = default)
     {
         if (id == "chatgpt") { await CodexClient.LoginAsync(cancellation); return; }
-        if (id != "claude") throw new ArgumentException("Unknown subscription");
+        if (id == "antigravity") { StartAntigravity(); return; }
+        if (id != "claude") {
+            var url = id switch {
+                "cursor" => "https://cursor.com/login",
+                "opencode" => "https://opencode.ai/auth",
+                "commandcode" => "https://commandcode.ai/",
+                _ => throw new ArgumentException("Unknown subscription")
+            };
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+            return;
+        }
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
         timeout.CancelAfter(TimeSpan.FromMinutes(5));
         using var process = Process.Start(StartInfo(id)) ?? throw new UsageConnectionException($"Could not start {Name(id)} login");
@@ -30,10 +44,22 @@ public static class SubscriptionLogin
             await errorDrain; if (outputDrain is not null) await outputDrain;
         }
     }
+    static void StartAntigravity()
+    {
+        var folders = Folders().ToArray();
+        var executable = FindOptional(folders.SelectMany(folder => new[] {
+            Path.Combine(folder, "agy.exe"),
+            Path.Combine(folder, "antigravity.exe"),
+            Path.Combine(folder, "antigravity-cli.exe")
+        }));
+        if (executable is null) throw new UsageConnectionException("Antigravity app or agy CLI was not found · install Antigravity and sign in there");
+        Process.Start(new ProcessStartInfo(executable) { UseShellExecute = true });
+    }
     static IEnumerable<string> Folders() => (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
         .Concat([Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin")])
         .Where(Path.IsPathFullyQualified).Distinct(StringComparer.OrdinalIgnoreCase);
     static string FindFile(IEnumerable<string> paths, string name) => paths.FirstOrDefault(File.Exists) ?? throw new UsageConnectionException($"{name} CLI must be installed · run the install command in README");
+    static string? FindOptional(IEnumerable<string> paths) => paths.FirstOrDefault(File.Exists);
     static ProcessStartInfo StartInfo(string id)
     {
         var folders = Folders().ToArray();
