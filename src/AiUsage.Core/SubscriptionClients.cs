@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 using static AiUsage.CodexClient;
 
@@ -69,72 +68,6 @@ public sealed class ClaudeClient(HttpClient? http = null, string? credentialsPat
         var first = UsageHttp.Percentage(session, "utilization"); var second = UsageHttp.Percentage(weekly, "utilization");
         return new("claude", plan, first, UsageHttp.Date(session, "resets_at"), second, UsageHttp.Date(weekly, "resets_at"),
             Status: first is null && second is null ? "No Claude quota data" : null, UpdatedAt: now);
-    }
-}
-
-public sealed class AntigravityClient(HttpClient? http = null, string? credentialsPath = null)
-{
-    const string Endpoint = "https://cloudcode-pa.googleapis.com/v1internal:";
-    const string ClientId = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com";
-    const string ClientSecret = "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";
-    public async Task<UsageEntry> FetchAsync(CancellationToken cancellation = default)
-    {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        timeout.CancelAfter(TimeSpan.FromSeconds(60));
-        var token = timeout.Token;
-        var credentials = await CredentialsAsync(token);
-        var access = String(credentials, "access_token");
-        if (string.IsNullOrWhiteSpace(access) || !Get(credentials, "expiry_date").TryNumber(out var expiry) || expiry < DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds())
-            access = await RefreshAsync(credentials, token);
-        var project = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_PROJECT") ?? Environment.GetEnvironmentVariable("GOOGLE_CLOUD_PROJECT_ID");
-        var loaded = await PostAsync("loadCodeAssist", access, new { cloudaicompanionProject = project, metadata = new { ideType = "IDE_UNSPECIFIED", platform = "PLATFORM_UNSPECIFIED", pluginType = "ANTIGRAVITY" } }, token);
-        var projectValue = Get(loaded, "cloudaicompanionProject");
-        project = projectValue.ValueKind == JsonValueKind.String ? projectValue.GetString() : String(projectValue, "id") ?? project;
-        if (string.IsNullOrWhiteSpace(project)) throw new UsageConnectionException("Antigravity account setup required · sign in and try again");
-        var tier = Get(loaded, "paidTier");
-        if (tier.ValueKind != JsonValueKind.Object) tier = Get(loaded, "currentTier");
-        var quota = await PostAsync("retrieveUserQuota", access, new { project }, token);
-        return Parse(quota, String(tier, "name") ?? String(tier, "id"), DateTimeOffset.Now);
-    }
-    async Task<JsonElement> CredentialsAsync(CancellationToken token)
-    {
-        var inline = Environment.GetEnvironmentVariable("ANTIGRAVITY_OAUTH_CREDENTIALS_JSON");
-        if (!string.IsNullOrWhiteSpace(inline)) return JsonDocument.Parse(inline).RootElement.Clone();
-        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-        var path = credentialsPath ?? new[] {
-            Path.Combine(home, ".codexbar", "antigravity", "oauth_creds.json"),
-            Path.Combine(home, ".gemini", "oauth_creds.json")
-        }.FirstOrDefault(File.Exists);
-        if (path is null) throw new UsageConnectionException("Antigravity login required · set ANTIGRAVITY_OAUTH_CREDENTIALS_JSON or connect the account");
-        return await UsageHttp.CredentialsAsync(path, "Antigravity", token);
-    }
-    async Task<string> RefreshAsync(JsonElement credentials, CancellationToken token)
-    {
-        var refresh = String(credentials, "refresh_token");
-        if (string.IsNullOrWhiteSpace(refresh)) throw new UsageConnectionException("Antigravity login expired · reconnect the account");
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://oauth2.googleapis.com/token") {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["client_id"] = ClientId, ["client_secret"] = ClientSecret, ["refresh_token"] = refresh, ["grant_type"] = "refresh_token" })
-        };
-        var result = await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, "Antigravity authentication", token);
-        return String(result, "access_token") ?? throw new UsageConnectionException("Could not refresh Antigravity login");
-    }
-    async Task<JsonElement> PostAsync(string method, string access, object payload, CancellationToken token)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint + method) { Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json") };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
-        request.Headers.UserAgent.ParseAdd("Antigravity");
-        return await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, "Antigravity", token);
-    }
-    public static UsageEntry Parse(JsonElement result, string? plan, DateTimeOffset now)
-    {
-        var buckets = Get(result, "buckets");
-        if (buckets.ValueKind != JsonValueKind.Array) throw new UsageConnectionException("Check the Antigravity quota response format");
-        var windows = buckets.EnumerateArray().Select(bucket => {
-            var label = String(bucket, "modelId") ?? "Model quota";
-            var fraction = Get(bucket, "remainingFraction");
-            return fraction.TryNumber(out var value) && value is >= 0 and <= 1 ? new UsageWindow(label, (1 - value) * 100, UsageHttp.Date(bucket, "resetTime")) : null;
-        }).OfType<UsageWindow>().Take(4).ToArray();
-        return new("antigravity", plan, Status: windows.Length == 0 ? "No Antigravity quota data" : null, UpdatedAt: now, Windows: windows);
     }
 }
 
