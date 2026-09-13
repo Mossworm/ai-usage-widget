@@ -59,7 +59,10 @@ public static class Card
                         for (var i = 0; i < windows.Length; i++) items.Add(Bar(windows[i], i != 0));
                     }
                 }
-                body.Add(new { type = "ColumnSet", separator = true, spacing = "Small", columns = new[] {
+                if (body.Count > 0) body.Add(new {
+                    type = "Image", url = CardImages.Separator, size = "Stretch", height = "1px", spacing = "Small", altText = ""
+                });
+                body.Add(new { type = "ColumnSet", spacing = "Small", columns = new[] {
                     Column([new { type = "Image", url = CardImages.Dot(service.Color), width = "24px", height = "24px", altText = service.Name }], "auto"),
                     Column(items.ToArray())
                 } });

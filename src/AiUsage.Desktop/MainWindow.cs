@@ -74,7 +74,7 @@ public sealed class MainWindow : Window
     void ApplyTheme(bool? forceDark = null)
     {
         bool dark = forceDark ?? (Registry.GetValue(@"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "AppsUseLightTheme", 1) is int value && value == 0);
-        foreach (var (key, light, night) in new[] { ("Background", "#FFFFFF", "#303030"), ("Text", "#20252B", "#F4F4F4"), ("Muted", "#707985", "#B3B6BD"), ("Track", "#EEEEEF", "#454545"), ("Selected", "#FFFFFF", "#4A4A4A"), ("Nav", "#F0F0F1", "#383838"), ("Line", "#F0F0F0", "#404040") })
+        foreach (var (key, light, night) in new[] { ("Background", "#FFFFFF", "#303030"), ("Text", "#20252B", "#F4F4F4"), ("Muted", "#707985", "#B3B6BD"), ("Track", "#EEEEEF", "#454545"), ("Selected", "#FFFFFF", "#4A4A4A"), ("Nav", "#F0F0F1", "#383838"), ("Line", CardImages.SeparatorColor, CardImages.SeparatorColor) })
             Resources[key] = Brush(dark ? night : light);
         if (SystemParameters.HighContrast && forceDark is null) {
             Resources["Background"] = SystemColors.WindowBrush; Resources["Text"] = SystemColors.WindowTextBrush;

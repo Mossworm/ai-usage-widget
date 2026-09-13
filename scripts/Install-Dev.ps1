@@ -1,5 +1,6 @@
+param([string]$PackageDirectory)
 $ErrorActionPreference = 'Stop'
-$manifest = Join-Path (Split-Path $PSScriptRoot -Parent) 'artifacts\package\AppxManifest.xml'
+$manifest = if ($PackageDirectory) { Join-Path ([IO.Path]::GetFullPath($PackageDirectory)) 'AppxManifest.xml' } else { Join-Path (Split-Path $PSScriptRoot -Parent) 'artifacts\package\AppxManifest.xml' }
 if (-not (Test-Path $manifest)) { throw 'Run scripts\Build.ps1 first.' }
 # Development registration needs Windows developer mode; does not trust a certificate.
 try { Add-AppxPackage -Register $manifest }

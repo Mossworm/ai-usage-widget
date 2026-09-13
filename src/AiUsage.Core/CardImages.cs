@@ -7,6 +7,10 @@ namespace AiUsage;
 // Everything is generated locally; no external asset requests or drawing dependencies.
 public static class CardImages
 {
+    // Neutral gray at 12.5% opacity stays light on light surfaces and dark on dark surfaces.
+    public const string SeparatorColor = "#20808080";
+    public static readonly string Separator = Png(560, 1, (_, _) => (128, 128, 128, 32));
+
     public static string Progress(double? value, bool weekly)
     {
         var p = Labels.RemainingPercent(value) ?? 0;

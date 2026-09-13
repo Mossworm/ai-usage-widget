@@ -1,7 +1,7 @@
-param([switch]$SkipRestore)
+param([switch]$SkipRestore, [string]$OutputDirectory)
 $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path $PSScriptRoot -Parent
-$output = Join-Path $projectRoot 'artifacts'
+$output = if ($OutputDirectory) { [IO.Path]::GetFullPath($OutputDirectory) } else { Join-Path $projectRoot 'artifacts' }
 $stage = Join-Path $output 'package'
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 foreach ($name in @('Desktop', 'Provider')) {
