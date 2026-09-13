@@ -60,40 +60,15 @@ Claude·Gemini의 OAuth 사용량 경로는 공개 결제 API가 아닌 CLI 서�
 
 빌드 결과가 있으면 `artifacts/package/Desktop/AiUsage.Desktop.exe`를 실행하세요. 이 실행 파일은 데스크톱 미리보기이며 위젯 패널 등록은 아래 단계가 필요합니다.
 
-```powershell
-# 연결 전 상태
-powershell -ExecutionPolicy Bypass -File scripts/Preview.ps1
-# 샘플 화면 (사용량·설정을 실제 파일에 쓰지 않음)
-powershell -ExecutionPolicy Bypass -File scripts/Preview.ps1 -Sample
-```
 
 ## 빌드 / 위젯 패널 등록
 
 필요 환경: Windows 11 22H2 이상, x64, .NET 10 SDK, Windows SDK(makeappx), Windows Web Experience Pack. 최초 빌드는 NuGet 다운로드가 필요합니다.
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/Build.ps1
-```
-
-`artifacts/AiUsageWidget.msix`와 `artifacts/package/`가 생성됩니다. .NET 및 Windows App SDK 런타임을 포함합니다. MSIX는 배포 서명 전 상태입니다. 개발 PC에서는 Windows 설정에서 **개발자 모드**를 켠 뒤 다음 명령으로 압축 해제된 패키지를 등록할 수 있습니다.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/Install-Dev.ps1
-```
 
 이후 **Win + W → 위젯 추가 → AI Usage**를 고정하세요. 작음·보통·큼 크기를 지원하며 모든 크기에 동일한 레이아웃을 사용하므로 작은 크기에서는 일부 내용이 잘릴 수 있습니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
 
 개발 등록을 제거하려면 다음 명령을 실행하세요. 기본적으로 앱 등록만 제거하고 `%LOCALAPPDATA%/AiUsageWidget`의 설정은 보존합니다.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/Uninstall-Dev.ps1
-```
-
-저장된 토글과 연결 관련 앱 설정까지 함께 지우려면 `-RemoveSettings`를 추가합니다. Codex·Claude·Gemini CLI 자체와 각 CLI의 로그인 정보는 삭제하지 않습니다.
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/Uninstall-Dev.ps1 -RemoveSettings
-```
 
 위젯 패널은 Windows가 Adaptive Card를 렌더링하므로 버튼·간격·모서리가 데스크톱 미리보기와 일부 다릅니다. 실제 패널에서의 최종 모양과 테마 전환은 설치 후 확인해야 합니다.
 
