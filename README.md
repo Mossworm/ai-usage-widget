@@ -1,17 +1,15 @@
 # AI Usage Widget
 
-Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude·Gemini 로그인은 Setting에서 브라우저로 연결합니다.
+Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude Code 로그인은 Setting에서 브라우저로 연결합니다.
 
-- Codex, ChatGPT API, Claude Code, Claude API, Antigravity, Gemini API 표시 토글
+- Codex, Claude Code 표시 토글
 - Codex·Claude Code: 이름·플랜, 5시간 사용률·리셋 시간, 주간 사용률·리셋 시간, 진행 막대
-- Antigravity: 이름·플랜, 모델별 사용률·리셋 시간, 진행 막대
-- API: 이번 달·오늘 비용(USD), 미확인 값은 `—`
 - Windows 라이트·다크 테마 자동 적용
 - 표시 언어는 Windows UI 언어와 관계없이 영어만 지원
 - 위젯 설정은 Windows 위젯 호스트의 CustomState에 저장. 데스크톱 미리보기 설정은 별도로 저장
-- 위젯은 보이는 동안 30초마다 화면을 갱신하고, 미리보기는 15초마다 갱신. 자동 서버 조회 간격은 인스턴스당 Codex 2분, Claude·Gemini 5분. HTTP 429는 Retry-After에 따라 최소 5분 동안 재시도를 제한
+- 위젯은 보이는 동안 30초마다 화면을 갱신하고, 미리보기는 15초마다 갱신. 자동 서버 조회 간격은 인스턴스당 Codex 2분, Claude Code 5분. HTTP 429는 Retry-After에 따라 최소 5분 동안 재시도를 제한
 
-**Codex·Claude Code·Gemini CLI의 로그인 기반 사용량 조회를 지원합니다.** Codex는 실제 계정으로 조회 검증했고, Claude·Gemini는 사용자 요청에 따라 로그인하지 않은 상태로 기능을 준비했습니다. API 비용 수집은 아직 미연결입니다. 화면과 연결 버튼의 이름은 `Codex`, `Claude Code`, `Antigravity`이며, 기존 설정 호환을 위해 `chatgpt`, `claude`, `gemini` 서비스 ID를 유지합니다. Antigravity 항목은 표시 이름만 변경했으며 로그인·사용량 조회는 기존 Gemini CLI 기반입니다. Codex 항목은 일반 ChatGPT 대화 한도가 아니라 Codex 한도입니다.
+**Codex와 Claude Code의 로그인 기반 사용량 조회를 지원합니다.** Codex는 일반 ChatGPT 대화 한도가 아니라 Codex 한도입니다. 기존 설정 호환을 위해 서비스 ID는 `chatgpt`, `claude`를 유지합니다.
 
 샘플 실행은 네트워크 조회·로그인·설정 저장을 하지 않으며 화면 하단에 샘플임을 표시합니다. 샘플 플랜과 수치는 레이아웃 확인용입니다.
 
@@ -36,50 +34,69 @@ codex login
 
 ## 실행
 
-### Claude / Gemini 연결
+### Claude Code 연결
 
-이 PC에는 공식 Claude Code CLI 2.1.269와 Gemini CLI 0.59.0을 설치했습니다. **지금은 로그인하지 않아도 됩니다.** 나중에 앱의 Setting에서 `Connect Claude Code` 또는 `Connect Antigravity`를 눌러 브라우저 인증을 완료하세요. 토글을 켜면 해당 로그인 정보로 자동 조회합니다.
+이 PC에는 공식 Claude Code CLI 2.1.269를 설치했습니다. **지금은 로그인하지 않아도 됩니다.** 나중에 앱의 Setting에서 `Connect Claude Code`를 눌러 브라우저 인증을 완료하세요. 토글을 켜면 해당 로그인 정보로 자동 조회합니다.
 
 다른 PC에서 필요한 CLI를 설치하려면:
 
 ```powershell
-npm install -g @anthropic-ai/claude-code@2.1.269 @google/gemini-cli@0.59.0
+npm install -g @anthropic-ai/claude-code@2.1.269
 ```
 
-Claude 로그인은 `claude auth login --claudeai`, Gemini 로그인은 공식 CLI ACP의 `initialize` → `authenticate` (`oauth-personal`)를 사용합니다. Gemini 프롬프트나 에이전트 세션을 생성하지 않습니다. 로그인 창을 닫거나 5분 동안 완료하지 않으면 재연결할 수 있습니다.
+Claude 로그인은 `claude auth login --claudeai`를 사용합니다. 로그인 창을 닫거나 5분 동안 완료하지 않으면 재연결할 수 있습니다.
 
 Claude 조회는 `%USERPROFILE%/.claude/.credentials.json`의 구독 OAuth 정보를 읽어 `https://api.anthropic.com/api/oauth/usage`에 GET 요청합니다. `CLAUDE_CONFIG_DIR`을 지원합니다. 전체 `five_hour` / `seven_day`만 사용하며 Sonnet·Opus별 한도를 전체 주간 한도로 혼동하지 않습니다. CLI 인증 파일을 수정하지 않습니다. CLI가 토큰을 갱신하면 다음 조회에서 읽으며, 만료된 경우 Setting에서 재연결 안내를 표시합니다.
 
-Gemini 조회는 `%USERPROFILE%/.gemini/oauth_creds.json`을 읽어 Google Code Assist의 `loadCodeAssist` → `retrieveUserQuota`를 호출합니다. `GEMINI_CLI_HOME`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_PROJECT_ID`를 지원합니다. 만료된 액세스 토큰은 Google OAuth로 갱신해 메모리에서만 사용하며 CLI 인증 파일을 덮어쓰지 않습니다. CLI의 별도 암호화 인증 저장 모드·서비스 계정·API 키는 이 연결에서 지원하지 않습니다.
+Claude의 OAuth 사용량 경로는 공개 결제 API가 아닌 CLI 서비스 경로라 변경될 수 있습니다. 조회 실패·로그인 만료·429는 서비스별 상태로 표시하며 다른 서비스 갱신을 막지 않습니다. 위젯은 비밀번호 입력을 받지 않고, 읽은 토큰·계정 식별자를 사용량 데이터나 로그에 기록하지 않습니다.
 
-Gemini의 `remainingFraction`을 사용 비율로 변환하고, 화면의 두 줄에는 Pro 및 Flash 계열별로 가장 많이 사용한 모델 하나씩을 실제 모델 ID와 함께 표시합니다. 해당 계열이 없으면 다른 모델로 채웁니다. 서로 다른 모델의 비율을 더하지 않으며, 5시간·주간 한도로 임의 변환하지 않습니다. Gemini 웹 채팅·Google AI Studio API 비용과도 구분됩니다.
-
-Claude·Gemini의 OAuth 사용량 경로는 공개 결제 API가 아닌 CLI 서비스 경로라 변경될 수 있습니다. 조회 실패·로그인 만료·429는 서비스별 상태로 표시하며 다른 서비스 갱신을 막지 않습니다. 위젯은 비밀번호 입력을 받지 않고, 읽은 토큰·계정 식별자를 사용량 데이터나 로그에 기록하지 않습니다.
-
-참고: [Claude 공식 인증·저장 위치](https://code.claude.com/docs/en/authentication), [Claude 저장소의 OAuth 사용량 응답 보고](https://github.com/anthropics/claude-code/issues/31021), [Google 공식 Code Assist 구현](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/code_assist/server.ts), [Google 공식 할당량 타입](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/code_assist/types.ts). Google 설치형 OAuth 클라이언트의 공개 메타데이터 출처는 [oauth2.ts](https://github.com/google-gemini/gemini-cli/blob/main/packages/core/src/code_assist/oauth2.ts)이며 사용자 비밀 키가 아닙니다.
+참고: [Claude 공식 인증·저장 위치](https://code.claude.com/docs/en/authentication), [Claude 저장소의 OAuth 사용량 응답 보고](https://github.com/anthropics/claude-code/issues/31021)
 
 빌드 결과가 있으면 `artifacts/package/Desktop/AiUsage.Desktop.exe`를 실행하세요. 이 실행 파일은 데스크톱 미리보기이며 위젯 패널 등록은 아래 단계가 필요합니다.
 
 
 ## 빌드 / 위젯 패널 등록
 
-필요 환경: Windows 11 22H2 이상, x64, .NET 10 SDK, Windows SDK(makeappx), Windows Web Experience Pack. 최초 빌드는 NuGet 다운로드가 필요합니다.
+필요 환경: Windows 11 22H2 이상, x64, .NET 10 SDK, Windows SDK(x64 makeappx·makepri), Windows Web Experience Pack. 설치에는 Windows 개발자 모드와 64비트 Windows PowerShell 5.1이 필요합니다. 최초 빌드는 NuGet 다운로드가 필요합니다.
 
+앞으로 빌드 후 설치는 저장소 루트의 통합 스크립트를 사용합니다. 저장소 폴더에서 다음 명령을 실행하세요.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1
+```
+
+기본 Release 빌드 → 오프라인 검사 → Desktop·Provider 자체 포함 게시 → 샘플 라이트·다크 Status / Setting 미리보기 생성 → PRI·MSIX 패키징 검증 → 현재 사용자의 개발 패키지 등록 → 등록 상태와 COM 공급자 활성화 확인을 순서대로 실행합니다. 계정 로그인이나 라이브 사용량 검사는 실행하지 않습니다. `packaging/Assets`에 포함된 로고를 사용하므로 기존 `artifacts` 없이도 빌드할 수 있습니다.
+
+```powershell
+# 설치하지 않고 빌드·검증·패키징만 실행
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -BuildOnly
+
+# Debug 구성으로 빌드·검증·설치
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Configuration Debug
+```
+
+실행마다 `artifacts/build-<고유 ID>/`에 MSIX와 패키징 로그(`resources.log`, `packaging.log`)를 보관합니다. `-BuildOnly`는 해당 폴더에만 결과를 만들고 기존 설치를 교체하지 않습니다. 설치 성공 시 실행 파일은 `artifacts/package`, 최신 MSIX 사본은 `artifacts/AiUsageWidget.msix`에 둡니다. MSIX는 서명되지 않으며 개발 설치는 매니페스트 등록 방식입니다.
+
+검증 완료 후 이 저장소의 실행 중인 Desktop·Provider를 종료하고 패키지를 교체합니다. 이전 `artifacts/package` 파일은 해당 빌드 폴더의 `previous-package`에 보관하며, 등록 또는 활성화 실패 시 이전 파일과 등록을 복구합니다. 기존 설치가 이 저장소의 `artifacts/버전/package`에 있으면 원래 파일을 보존하고, 기존 개발 등록을 제거한 뒤 `artifacts/package`로 다시 등록합니다. 경로 전환 시 위젯 패널에서 AI Usage를 다시 추가해야 할 수 있습니다. 복구까지 실패하면 경고에 표시된 경로와 오류를 확인하세요. `%LOCALAPPDATA%/AiUsageWidget`의 사용자 설정은 유지합니다. 서명된 설치나 이 저장소의 `artifacts` 밖에 있는 개발 등록은 교체하지 않고 중단합니다. 같은 저장소에서 스크립트를 동시에 실행할 수 없습니다.
 
 이후 **Win + W → 위젯 추가 → AI Usage**를 고정하세요. 작음·보통·큼 크기를 지원하며 모든 크기에 동일한 레이아웃을 사용하므로 작은 크기에서는 일부 내용이 잘릴 수 있습니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
 
 개발 등록을 제거하려면 다음 명령을 실행하세요. 기본적으로 앱 등록만 제거하고 `%LOCALAPPDATA%/AiUsageWidget`의 설정은 보존합니다.
 
+```powershell
+Get-AppxPackage -Name Mossworm.AiUsageWidget | Remove-AppxPackage
+```
+
 위젯 패널은 Windows가 Adaptive Card를 렌더링하므로 버튼·간격·모서리가 데스크톱 미리보기와 일부 다릅니다. 실제 패널에서의 최종 모양과 테마 전환은 설치 후 확인해야 합니다.
 
 ## 사용량 데이터 계약
 
-API 비용 수집기가 `%LOCALAPPDATA%/AiUsageWidget/usage.json`에 `examples/usage.sample.json` 형식으로 스냅샷을 기록하면 위젯이 읽습니다. 실제 모드에서 `chatgpt`, `claude`, `gemini` 항목은 각 서비스 조회 결과로 대체하며 파일에는 쓰지 않습니다. `IsSample: true`인 로컬 파일은 전체 샘플 모드로 취급해 네트워크 조회를 중지합니다. 토글을 끄면 해당 인스턴스의 추가 서버 조회도 중지합니다.
+사용량 수집기가 `%LOCALAPPDATA%/AiUsageWidget/usage.json`에 `examples/usage.sample.json` 형식으로 스냅샷을 기록하면 위젯이 읽습니다. 실제 모드에서 `chatgpt`, `claude` 항목은 각 서비스 조회 결과로 대체하며 파일에는 쓰지 않습니다. `IsSample: true`인 로컬 파일은 전체 샘플 모드로 취급해 네트워크 조회를 중지합니다. 토글을 끄면 해당 인스턴스의 추가 서버 조회도 중지합니다.
 
 - `UpdatedAt`: 실제 수집 시각, ISO 8601 시간대 포함. 5분 이상 경과하면 오래된 데이터 표시
 - `SessionPercent` / `WeeklyPercent`: 사용한 비율, 0–100. 알 수 없으면 null
 - `SessionReset` / `WeeklyReset`: ISO 8601 리셋 시각. Windows 현지 시간으로 표시
-- `Windows`: Gemini처럼 시간 창이 아닌 모델별 한도용 `{Label, Percent, Reset}` 배열
+- `Windows`: 모델별 한도용 `{Label, Percent, Reset}` 배열
 - `MonthCost` / `DayCost`: USD 비용. 집계 시간대는 수집기가 정함
 - `IsSample`: 샘플이면 true. 실제 수집 결과만 false
 - API 키나 세션 토큰은 이 파일에 넣지 마세요
@@ -94,9 +111,9 @@ dotnet run --project tests/AiUsage.Checks
 
 토글 독립성·저장 복원, 전체 끄기, 미연결/0 비용 구분, 리셋 계산, 잘못된 데이터 복구, 위젯 상단 내비게이션 제거, 사용자 지정 메뉴와 콜백 프록시 등록을 검사합니다. 빌드 과정에서 라이트·다크 Status / Setting PNG를 `artifacts/package/Assets`에 렌더링합니다.
 
-`Customize widget` 메뉴가 열려도 설정 화면으로 바뀌지 않는다면 패키지 매니페스트의 `IWidgetProvider2` 프록시 등록을 확인하세요. 이 프로젝트는 MSIX를 직접 조립하므로 Windows App SDK의 `package.appxfragment`에 있는 사용자 지정 콜백 프록시를 데스크톱 COM용 `windows.comInterface` 형식으로 `packaging/AppxManifest.xml`에 명시합니다. `IsCustomizable`과 C# 인터페이스 구현만으로는 프로세스 간 콜백 전달이 되지 않습니다. [COM 인터페이스 등록 문서](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-com-cominterface)를 참고하세요. 매니페스트 변경 후에는 패키지 버전을 올리고, 빌드와 `scripts/Install-Dev.ps1` 실행으로 패키지를 다시 등록해야 합니다.
+`Customize widget` 메뉴가 열려도 설정 화면으로 바뀌지 않는다면 패키지 매니페스트의 `IWidgetProvider2` 프록시 등록을 확인하세요. 이 프로젝트는 MSIX를 직접 조립하므로 Windows App SDK의 `package.appxfragment`에 있는 사용자 지정 콜백 프록시를 데스크톱 COM용 `windows.comInterface` 형식으로 `packaging/AppxManifest.xml`에 명시합니다. `IsCustomizable`과 C# 인터페이스 구현만으로는 프로세스 간 콜백 전달이 되지 않습니다. [COM 인터페이스 등록 문서](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-com-cominterface)를 참고하세요. 매니페스트 변경 후에는 패키지 버전을 올리고, `build-install.ps1`을 실행해 빌드·검증 후 패키지를 다시 등록해야 합니다.
 
-현재 검증 결과: 기존 기능과 세 서비스 응답 매핑, 가짜 HTTP 전송을 이용한 인증·갱신·프로젝트 조회·429 대기·401 메시지·인증 파일 보존 검사 70개 통과. Codex는 실제 계정 조회를 검증했습니다. Claude·Gemini의 실제 로그인 완료 및 라이브 사용량 조회는 사용자 요청으로 보류했습니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
+현재 검증 결과: Codex·Claude Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사 60개 통과. Codex는 실제 계정 조회를 검증했습니다. Claude Code의 실제 로그인 완료 및 라이브 사용량 조회는 별도 실행이 필요합니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
 
 v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 완료했습니다. 샘플 Status와 로그인 버튼이 포함된 실제 Setting의 라이트·다크 PNG도 확인했습니다.
 
@@ -105,7 +122,7 @@ v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 �
 ```powershell
 dotnet run --project tests/AiUsage.Checks -- --live
 dotnet run --project tests/AiUsage.Checks -- --live-claude
-dotnet run --project tests/AiUsage.Checks -- --live-gemini
+dotnet run --project tests/AiUsage.Checks -- --live-claude
 ```
 
 Codex 연결 참고: [공식 App Server 문서](https://learn.chatgpt.com/docs/app-server), [공식 인증 문서](https://learn.chatgpt.com/docs/auth). 사용자 제공 예제인 [spourdei/codex-usage-widget](https://github.com/spourdei/codex-usage-widget)과 [ZeroP27/codex-usage](https://github.com/ZeroP27/codex-usage)의 RPC 방식·시간 창 매핑을 참고하여 C#으로 별도 구현했습니다. 외부 프로젝트의 OAuth 토큰 직접 관리·계정 전환·리셋 크레딧 기능은 포함하지 않습니다.

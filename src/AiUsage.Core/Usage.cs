@@ -15,19 +15,11 @@ public static class Catalog
 {
     public static readonly Service[] Services = [
         new("chatgpt", "Codex", false, "#10A586"),
-        new("openai-api", "ChatGPT API", true, "#10A586"),
-        new("claude", "Claude Code", false, "#D87959"),
-        new("anthropic-api", "Claude API", true, "#D87959"),
-        new("gemini", "Antigravity", false, "#4385EF"),
-        new("gemini-api", "Gemini API", true, "#4385EF")
+        new("claude", "Claude Code", false, "#D87959")
     ];
     public static UsageSnapshot Sample(DateTimeOffset now) => new(now, [
         new("chatgpt", "Plus", 23, now.AddHours(3).AddMinutes(12), 38, now.AddDays(4)),
-        new("openai-api", MonthCost: 12.48m, DayCost: 0.82m),
-        new("claude", "Max", 7, now.AddHours(2).AddMinutes(42), 14, now.AddDays(3)),
-        new("anthropic-api", MonthCost: 8.64m, DayCost: 0.36m),
-        new("gemini", "Pro", Windows: [new("gemini-pro", 51, now.AddHours(10)), new("gemini-flash", 16, now.AddHours(10))]),
-        new("gemini-api")
+        new("claude", "Max", 7, now.AddHours(2).AddMinutes(42), 14, now.AddDays(3))
     ], true);
 }
 
@@ -74,9 +66,8 @@ public static class LocalStore
 
 public static class Labels
 {
-    public static UsageWindow[] Windows(Service service, UsageEntry? usage) => usage?.Windows ?? (service.Id == "gemini"
-        ? [new("Model quota", null, null)]
-        : [new("5-hour", usage?.SessionPercent, usage?.SessionReset), new("Weekly", usage?.WeeklyPercent, usage?.WeeklyReset)]);
+    public static UsageWindow[] Windows(Service service, UsageEntry? usage) => usage?.Windows
+        ?? [new("5-hour", usage?.SessionPercent, usage?.SessionReset), new("Weekly", usage?.WeeklyPercent, usage?.WeeklyReset)];
     public static double? RemainingPercent(double? used) => used is null || !double.IsFinite(used.Value)
         ? null
         : 100 - Math.Clamp(used.Value, 0, 100);

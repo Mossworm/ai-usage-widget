@@ -111,7 +111,7 @@ public sealed class MainWindow : Window
             }
             if (!sample) {
                 var connections = new UniformGrid { Columns = 2, Margin = new(14, 8, 14, 0) };
-                foreach (var id in new[] { "chatgpt", "claude", "gemini" }) {
+                foreach (var id in new[] { "chatgpt", "claude" }) {
                     var connect = new Button { Content = $"Connect {SubscriptionLogin.Name(id)}", Margin = new(6, 4, 6, 4), IsEnabled = !loginPending };
                     connect.SetResourceReference(Button.BackgroundProperty, "Nav");
                     connect.Click += async (_, _) => await ConnectSubscriptionAsync(id);

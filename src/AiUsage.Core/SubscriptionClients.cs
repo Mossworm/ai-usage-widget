@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
 using System.Text.Json;
 using static AiUsage.CodexClient;
 
@@ -72,70 +71,3 @@ public sealed class ClaudeClient(HttpClient? http = null, string? credentialsPat
     }
 }
 
-public sealed class GeminiClient(HttpClient? http = null, string? credentialsPath = null)
-{
-    // Public installed-app OAuth client metadata published by google-gemini/gemini-cli.
-    // These identify the CLI; they are not a user's secret or an API key.
-    const string ClientId = "681255809395-oo8ft2oprdrnp9e3aqf6av3hmdib135j.apps.googleusercontent.com";
-    const string ClientSecret = "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";
-    const string Endpoint = "https://cloudcode-pa.googleapis.com/v1internal:";
-    public async Task<UsageEntry> FetchAsync(CancellationToken cancellation = default)
-    {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        timeout.CancelAfter(TimeSpan.FromSeconds(60));
-        var token = timeout.Token;
-        var folder = Path.Combine(Environment.GetEnvironmentVariable("GEMINI_CLI_HOME") ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".gemini");
-        var credentials = await UsageHttp.CredentialsAsync(credentialsPath ?? Path.Combine(folder, "oauth_creds.json"), "Gemini", token);
-        var access = String(credentials, "access_token");
-        if (string.IsNullOrWhiteSpace(access) || !Get(credentials, "expiry_date").TryNumber(out var expiry) || expiry < DateTimeOffset.UtcNow.AddMinutes(1).ToUnixTimeMilliseconds())
-            access = await RefreshAccessAsync(credentials, token);
-        var project = Environment.GetEnvironmentVariable("GOOGLE_CLOUD_PROJECT") ?? Environment.GetEnvironmentVariable("GOOGLE_CLOUD_PROJECT_ID");
-        var loaded = await PostAsync("loadCodeAssist", access, new { cloudaicompanionProject = project, metadata = new { ideType = "IDE_UNSPECIFIED", platform = "PLATFORM_UNSPECIFIED", pluginType = "GEMINI" } }, token);
-        var projectValue = Get(loaded, "cloudaicompanionProject");
-        project = projectValue.ValueKind == JsonValueKind.String ? projectValue.GetString() : String(projectValue, "id") ?? project;
-        if (string.IsNullOrWhiteSpace(project)) throw new UsageConnectionException("Gemini CLI account setup required · sign in and try again");
-        var tier = Get(loaded, "paidTier");
-        if (tier.ValueKind != JsonValueKind.Object) tier = Get(loaded, "currentTier");
-        var quota = await PostAsync("retrieveUserQuota", access, new { project }, token);
-        return Parse(quota, String(tier, "name") ?? String(tier, "id"), DateTimeOffset.Now);
-    }
-    async Task<string> RefreshAccessAsync(JsonElement credentials, CancellationToken token)
-    {
-        var refresh = String(credentials, "refresh_token");
-        if (string.IsNullOrWhiteSpace(refresh)) throw new UsageConnectionException("Gemini login expired · reconnect in Settings");
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://oauth2.googleapis.com/token") {
-            Content = new FormUrlEncodedContent(new Dictionary<string, string> { ["client_id"] = ClientId, ["client_secret"] = ClientSecret, ["refresh_token"] = refresh, ["grant_type"] = "refresh_token" })
-        };
-        var result = await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, "Gemini authentication", token);
-        return String(result, "access_token") ?? throw new UsageConnectionException("Could not refresh Gemini login · reconnect in Settings");
-        // Never overwrite Gemini CLI credentials. Refreshed access tokens live only in memory.
-    }
-    async Task<JsonElement> PostAsync(string method, string access, object payload, CancellationToken token)
-    {
-        using var request = new HttpRequestMessage(HttpMethod.Post, Endpoint + method) { Content = JsonContent.Create(payload) };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
-        request.Headers.UserAgent.ParseAdd("AiUsageWidget/1.2.0");
-        return await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, "Gemini", token);
-    }
-    public static UsageEntry Parse(JsonElement result, string? plan, DateTimeOffset now)
-    {
-        var buckets = Get(result, "buckets");
-        if (buckets.ValueKind != JsonValueKind.Array) throw new UsageConnectionException("Check the Gemini model quota response format");
-        var all = new List<UsageWindow>();
-        foreach (var bucket in buckets.EnumerateArray()) {
-            var model = String(bucket, "modelId");
-            if (string.IsNullOrWhiteSpace(model) || !Get(bucket, "remainingFraction").TryNumber(out var fraction) || fraction < 0 || fraction > 1) continue;
-            all.Add(new(model, (1 - fraction) * 100, UsageHttp.Date(bucket, "resetTime")));
-        }
-        // Fit the two-line widget: show the most depleted Pro and Flash model, then fill
-        // missing families with remaining models. Never add independent quota percentages.
-        var sorted = all.OrderByDescending(x => x.Percent).ThenBy(x => x.Label, StringComparer.Ordinal).ToArray();
-        var selected = new List<UsageWindow>();
-        foreach (var family in new[] { "pro", "flash" }) {
-            var match = sorted.FirstOrDefault(x => x.Label.Contains(family, StringComparison.OrdinalIgnoreCase));
-            if (match is not null && !selected.Any(x => x.Label == match.Label)) selected.Add(match);
-        }
-        foreach (var value in sorted) if (selected.Count < 2 && !selected.Any(x => x.Label == value.Label)) selected.Add(value);
-        return new("gemini", plan, Status: selected.Count == 0 ? "No Gemini model quota data" : null, UpdatedAt: now, Windows: selected.ToArray());
-    }
-}
