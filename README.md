@@ -2,16 +2,16 @@
 
 Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude·Gemini 로그인은 Setting에서 브라우저로 연결합니다.
 
-- Codex (ChatGPT), ChatGPT API, Claude, Claude API, Gemini CLI, Gemini API 표시 토글
-- Codex·Claude: 이름·플랜, 5시간 사용률·리셋 시간, 주간 사용률·리셋 시간, 진행 막대
-- Gemini CLI: 이름·플랜, 모델별 사용률·리셋 시간, 진행 막대
+- Codex, ChatGPT API, Claude Code, Claude API, Antigravity, Gemini API 표시 토글
+- Codex·Claude Code: 이름·플랜, 5시간 사용률·리셋 시간, 주간 사용률·리셋 시간, 진행 막대
+- Antigravity: 이름·플랜, 모델별 사용률·리셋 시간, 진행 막대
 - API: 이번 달·오늘 비용(USD), 미확인 값은 `—`
 - Windows 라이트·다크 테마 자동 적용
 - 표시 언어는 Windows UI 언어와 관계없이 영어만 지원
 - 위젯 설정은 Windows 위젯 호스트의 CustomState에 저장. 데스크톱 미리보기 설정은 별도로 저장
 - 위젯은 보이는 동안 30초마다 화면을 갱신하고, 미리보기는 15초마다 갱신. 자동 서버 조회 간격은 인스턴스당 Codex 2분, Claude·Gemini 5분. HTTP 429는 Retry-After에 따라 최소 5분 동안 재시도를 제한
 
-**Codex·Claude·Gemini CLI의 로그인 기반 사용량 조회를 지원합니다.** Codex는 실제 계정으로 조회 검증했고, Claude·Gemini는 사용자 요청에 따라 로그인하지 않은 상태로 기능을 준비했습니다. API 비용 수집은 아직 미연결입니다. 기존 `chatgpt` 서비스 ID를 유지하면서 표시 이름은 `Codex (ChatGPT)`로 바꿨습니다. 이 값은 일반 ChatGPT 대화 한도가 아니라 Codex 한도입니다.
+**Codex·Claude Code·Gemini CLI의 로그인 기반 사용량 조회를 지원합니다.** Codex는 실제 계정으로 조회 검증했고, Claude·Gemini는 사용자 요청에 따라 로그인하지 않은 상태로 기능을 준비했습니다. API 비용 수집은 아직 미연결입니다. 화면과 연결 버튼의 이름은 `Codex`, `Claude Code`, `Antigravity`이며, 기존 설정 호환을 위해 `chatgpt`, `claude`, `gemini` 서비스 ID를 유지합니다. Antigravity 항목은 표시 이름만 변경했으며 로그인·사용량 조회는 기존 Gemini CLI 기반입니다. Codex 항목은 일반 ChatGPT 대화 한도가 아니라 Codex 한도입니다.
 
 샘플 실행은 네트워크 조회·로그인·설정 저장을 하지 않으며 화면 하단에 샘플임을 표시합니다. 샘플 플랜과 수치는 레이아웃 확인용입니다.
 
@@ -38,7 +38,7 @@ codex login
 
 ### Claude / Gemini 연결
 
-이 PC에는 공식 Claude Code CLI 2.1.269와 Gemini CLI 0.59.0을 설치했습니다. **지금은 로그인하지 않아도 됩니다.** 나중에 앱의 Setting에서 `Claude 로그인 / 다시 연결` 또는 `Gemini 로그인 / 다시 연결`을 눌러 브라우저 인증을 완료하세요. 토글을 켜면 해당 로그인 정보로 자동 조회합니다.
+이 PC에는 공식 Claude Code CLI 2.1.269와 Gemini CLI 0.59.0을 설치했습니다. **지금은 로그인하지 않아도 됩니다.** 나중에 앱의 Setting에서 `Connect Claude Code` 또는 `Connect Antigravity`를 눌러 브라우저 인증을 완료하세요. 토글을 켜면 해당 로그인 정보로 자동 조회합니다.
 
 다른 PC에서 필요한 CLI를 설치하려면:
 

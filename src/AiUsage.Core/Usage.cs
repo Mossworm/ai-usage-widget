@@ -14,11 +14,11 @@ public record UsageSnapshot(DateTimeOffset? UpdatedAt, UsageEntry[] Services, bo
 public static class Catalog
 {
     public static readonly Service[] Services = [
-        new("chatgpt", "Codex (ChatGPT)", false, "#10A586"),
+        new("chatgpt", "Codex", false, "#10A586"),
         new("openai-api", "ChatGPT API", true, "#10A586"),
-        new("claude", "Claude", false, "#D87959"),
+        new("claude", "Claude Code", false, "#D87959"),
         new("anthropic-api", "Claude API", true, "#D87959"),
-        new("gemini", "Gemini CLI", false, "#4385EF"),
+        new("gemini", "Antigravity", false, "#4385EF"),
         new("gemini-api", "Gemini API", true, "#4385EF")
     ];
     public static UsageSnapshot Sample(DateTimeOffset now) => new(now, [

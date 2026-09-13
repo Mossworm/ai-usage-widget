@@ -50,7 +50,7 @@ prefs.Toggle("invalid-id");
 Check(prefs.Enabled.Count == 5, "Unknown service is ignored");
 using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     var text = doc.RootElement.ToString();
-    Check(!text.Contains("Claude  ·"), "Disabled subscription hidden");
+    Check(!text.Contains("Claude Code  ·"), "Disabled subscription hidden");
     Check(text.Contains("Claude API"), "API visibility independent of subscription");
     var body = doc.RootElement.GetProperty("body");
     Check(body[body.GetArrayLength() - 1].GetProperty("type").GetString() == "ColumnSet", "Status has no footer");

@@ -25,11 +25,11 @@ public static class Card
                 });
             }
             if (!data.IsSample) body.Add(new { type = "ActionSet", actions = new[] {
-                new { type = "Action.OpenUrl", title = "Connect Codex", url = "aiusage:login" },
-                new { type = "Action.OpenUrl", title = "Connect Claude", url = "aiusage:login-claude" }
+                new { type = "Action.OpenUrl", title = $"Connect {SubscriptionLogin.Name("chatgpt")}", url = "aiusage:login" },
+                new { type = "Action.OpenUrl", title = $"Connect {SubscriptionLogin.Name("claude")}", url = "aiusage:login-claude" }
             }, spacing = "Medium" });
             if (!data.IsSample) body.Add(new { type = "ActionSet", actions = new[] {
-                new { type = "Action.OpenUrl", title = "Connect Gemini", url = "aiusage:login-gemini" }
+                new { type = "Action.OpenUrl", title = $"Connect {SubscriptionLogin.Name("gemini")}", url = "aiusage:login-gemini" }
             }, spacing = "Small" });
             body.Add(new {
                 type = "Container", height = "stretch", verticalContentAlignment = "bottom", spacing = "Medium",

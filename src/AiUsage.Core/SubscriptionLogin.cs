@@ -5,7 +5,8 @@ namespace AiUsage;
 
 public static class SubscriptionLogin
 {
-    public static string Name(string id) => id switch { "chatgpt" => "Codex", "claude" => "Claude", "gemini" => "Gemini", _ => throw new ArgumentException("Unknown subscription") };
+    public static string Name(string id) => Catalog.Services.FirstOrDefault(s => s.Id == id && !s.IsApi)?.Name
+        ?? throw new ArgumentException("Unknown subscription");
     public static string? FromArgument(string argument) => argument.ToLowerInvariant() switch {
         "--login" or "aiusage:login" => "chatgpt",
         "--login-claude" or "aiusage:login-claude" => "claude",
