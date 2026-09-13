@@ -118,9 +118,12 @@ try { Parse("""{"rateLimits":{"limitId":"code_review"}}"""); Check(false, "Wrong
 catch (CodexException) { Check(true, "Unrelated quota is not displayed as Codex"); }
 using (var doc = JsonDocument.Parse(Card.Render(new() { Settings = true }, new(null, []), now))) {
     var body = doc.RootElement.GetProperty("body");
-    var actions = body.EnumerateArray().Single(x => x.GetProperty("type").GetString() == "ActionSet").GetProperty("actions");
-    Check(actions.GetArrayLength() == 2, "Connection actions include only supported services");
-    Check(actions[0].GetProperty("url").GetString() == "aiusage:login", "Native widget connects through registered login protocol");
+    var rows = body.EnumerateArray().Where(x => x.GetProperty("type").GetString() == "ColumnSet").ToArray();
+    var codexColumns = rows[0].GetProperty("columns");
+    var claudeColumns = rows[1].GetProperty("columns");
+    Check(rows.Length == 2 && codexColumns.GetArrayLength() == 3 && claudeColumns.GetArrayLength() == 3, "Each service row has name, connection, and toggle columns");
+    Check(codexColumns[1].GetProperty("items")[0].GetProperty("actions")[0].GetProperty("url").GetString() == "aiusage:login", "Codex connects through its registered login protocol");
+    Check(claudeColumns[1].GetProperty("items")[0].GetProperty("actions")[0].GetProperty("url").GetString() == "aiusage:login-claude", "Claude connects through its registered login protocol");
 }
 await SubscriptionChecks.RunAsync(Check, now);
 Console.WriteLine($"{passed} checks passed.");

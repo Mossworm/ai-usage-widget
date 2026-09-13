@@ -21,19 +21,21 @@ public static class Card
                 body.Add(new {
                     type = "ColumnSet", spacing = "Medium",
                     selectAction = Action($"{service.Name} {(enabled ? "turn off" : "turn on")}", "toggle:" + service.Id),
-                    columns = new[] { Column([Text(service.Name)]), Column([new { type = "Image", url = ToggleImage(enabled), width = "34px", height = "20px", altText = enabled ? "On" : "Off" }], "auto") }
+                    columns = new[] {
+                        Column([Text(service.Name)]),
+                        !data.IsSample ? Column([new { type = "ActionSet", actions = new[] {
+                            new { type = "Action.OpenUrl", title = "Connect", url = service.Id == "chatgpt" ? "aiusage:login" : "aiusage:login-claude" }
+                        } }], "auto") : Column([]),
+                        Column([new { type = "Image", url = ToggleImage(enabled), width = "34px", height = "20px", altText = enabled ? "On" : "Off" }], "auto")
+                    }
                 });
             }
-            if (!data.IsSample) body.Add(new { type = "ActionSet", actions = new[] {
-                new { type = "Action.OpenUrl", title = $"Connect {SubscriptionLogin.Name("chatgpt")}", url = "aiusage:login" },
-                new { type = "Action.OpenUrl", title = $"Connect {SubscriptionLogin.Name("claude")}", url = "aiusage:login-claude" }
-            }, spacing = "Medium" });
             body.Add(new {
                 type = "Container", height = "stretch", verticalContentAlignment = "bottom", spacing = "Medium",
                 items = new[] { new {
                     type = "ColumnSet", columns = new[] {
-                        Column([]),
-                        Column([new { type = "ActionSet", actions = new[] { Action("Back", "status") } }], "auto")
+                        Column([new { type = "ActionSet", actions = new[] { Action("Back", "status") } }], "auto"),
+                        Column([])
                     }
                 } }
             });
