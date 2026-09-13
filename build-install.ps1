@@ -9,7 +9,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 $repo = [IO.Path]::GetFullPath($PSScriptRoot)
 $artifacts = Join-Path $repo 'artifacts'
-$build = Join-Path $artifacts ('build-' + [guid]::NewGuid().ToString('N'))
+$build = Join-Path $artifacts 'publish'
 $stage = Join-Path $build 'package'
 $package = Join-Path $artifacts 'package'
 $backup = Join-Path $build 'previous-package'
@@ -63,11 +63,14 @@ try {
     Assert-ArtifactPath $stage
     Assert-ArtifactPath $package
     Assert-ArtifactPath $backup
+    New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
     $lockPath = Join-Path $artifacts 'build-install.lock'
     Assert-ArtifactPath $lockPath
-    New-Item -ItemType Directory -Path $artifacts -Force | Out-Null
     try { $buildLock = [IO.File]::Open($lockPath, 'OpenOrCreate', 'ReadWrite', 'None') }
     catch { throw "Cannot acquire build lock. Another build may be running: $lockPath. $($_.Exception.Message)" }
+
+    if (Test-Path -LiteralPath $build) { Remove-Item -LiteralPath $build -Recurse -Force }
+    New-Item -ItemType Directory -Path $stage -Force | Out-Null
 
     $installed = $null
     if (!$BuildOnly) {
@@ -88,7 +91,6 @@ try {
         }
     }
 
-    New-Item -ItemType Directory -Path $stage -Force | Out-Null
     Write-Host "Building and checking AI Usage ($Configuration)..."
     Invoke-Checked $dotnet @('build', 'AiUsage.slnx', '-c', $Configuration, '--nologo')
     Invoke-Checked $dotnet @('run', '--project', 'tests/AiUsage.Checks', '-c', $Configuration, '--no-build')
@@ -185,7 +187,7 @@ try {
         catch { Write-Warning "Rollback failed: $($_.Exception.Message). Previous files: $backup. Build files: $build" }
         throw $failure
     }
-    # The unique build MSIX remains available even if updating this convenience copy fails.
+    # Keep a convenience copy at the artifacts root for existing workflows.
     try {
         Assert-ArtifactPath (Join-Path $artifacts 'AiUsageWidget.msix')
         Copy-Item -LiteralPath $msix -Destination (Join-Path $artifacts 'AiUsageWidget.msix') -Force
