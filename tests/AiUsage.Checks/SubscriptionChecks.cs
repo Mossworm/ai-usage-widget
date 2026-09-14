@@ -11,6 +11,25 @@ static class SubscriptionChecks
         var claude = ClaudeClient.Parse(Json("""{"five_hour":{"utilization":22.5,"resets_at":"2026-09-12T12:00:00Z"},"seven_day":{"utilization":73,"resets_at":"2026-09-18T12:00:00Z"},"seven_day_sonnet":{"utilization":99}}"""), "max", now);
         check(claude.SessionPercent == 22.5 && claude.WeeklyPercent == 73, "Claude global limits are distinct from model limits");
         check(claude.Plan == "max" && claude.SessionReset?.Offset == TimeSpan.Zero, "Claude plan and ISO reset parsed");
+        check(claude.Windows is null && Labels.Windows(Catalog.Services[1], claude).Length == 2, "Without a tracked model quota Claude keeps the two global rows");
+        var fable = ClaudeClient.Parse(Json("""{"five_hour":{"utilization":22.5},"seven_day":{"utilization":73},"seven_day_sonnet":{"utilization":99},"seven_day_fable":{"utilization":41,"resets_at":"2026-09-18T12:00:00Z"}}"""), "max", now);
+        var fableWindows = Labels.Windows(Catalog.Services[1], fable);
+        check(fableWindows.Length == 3 && fableWindows[0].Percent == 22.5 && fableWindows[1].Percent == 73, "The Fable weekly row is added after the global 5-hour and weekly rows");
+        check(fableWindows[2] is { Label: "Weekly (Fable)", Percent: 41 } && fableWindows[2].Reset?.Offset == TimeSpan.Zero, "The Fable weekly quota keeps its own percentage and reset time");
+        check(fable.WeeklyPercent == 73 && fableWindows.All(w => w.Percent != 99), "The Fable row never takes the Sonnet quota or replaces the global weekly one");
+        // The shape a live Max account returns: seven_day_<model> keys are null and the real
+        // per-model quota is a weekly_scoped row in `limits`, named by display_name.
+        var live = Json("""{"five_hour":{"utilization":8},"seven_day":{"utilization":1},"seven_day_opus":null,"seven_day_sonnet":null,"limits":[{"kind":"session","group":"session","percent":8,"resets_at":"2026-09-14T16:00:00Z"},{"kind":"weekly_all","group":"weekly","percent":1,"resets_at":"2026-09-19T00:00:00Z"},{"kind":"weekly_scoped","group":"weekly","percent":37,"resets_at":"2026-09-19T00:00:00Z","scope":{"model":{"id":null,"display_name":"Fable"},"surface":null}}]}""");
+        var scoped = Labels.Windows(Catalog.Services[1], ClaudeClient.Parse(live, "max", now));
+        check(scoped.Length == 3 && scoped[0].Percent == 8 && scoped[1].Percent == 1, "A live-shaped response keeps the global 5-hour and weekly rows");
+        check(scoped[2] is { Label: "Weekly (Fable)", Percent: 37 } && scoped[2].Reset?.Offset == TimeSpan.Zero, "The scoped weekly quota in limits becomes the Fable row");
+        check(ClaudeClient.ScopedModelNames(live) is ["Fable"], "Per-model quota names are reported for configuration");
+        var unscoped = ClaudeClient.Parse(Json("""{"five_hour":{"utilization":8},"seven_day":{"utilization":1},"limits":[{"kind":"weekly_scoped","percent":50,"scope":{"model":{"display_name":"Sonnet"}}}]}"""), "max", now);
+        check(unscoped.Windows is null, "A weekly_scoped row for another model adds no Fable row");
+        var spelled = ClaudeClient.Parse(Json("""{"five_hour":{"utilization":1},"seven_day":{"utilization":2},"seven-day-Fable-5":{"utilization":3}}"""), null, now);
+        check(Labels.Windows(Catalog.Services[1], spelled) is [_, _, { Percent: 3 }], "A differently spelled Fable window key still matches");
+        var emptyFable = ClaudeClient.Parse(Json("""{"five_hour":{"utilization":1},"seven_day":{"utilization":2},"seven_day_fable":{"utilization":null}}"""), null, now);
+        check(emptyFable.Windows is null, "A Fable window with no usable number adds no empty row");
         var unknown = ClaudeClient.Parse(Json("""{"five_hour":null,"seven_day":null}"""), null, now);
         check(unknown.SessionPercent is null && unknown.Status is not null, "Claude missing quota is not zero");
         var invalid = ClaudeClient.Parse(Json("""{"five_hour":{"utilization":101,"resets_at":"invalid"},"seven_day":null}"""), null, now);

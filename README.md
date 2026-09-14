@@ -42,7 +42,17 @@ Setting에서 `Connect`를 누르면 기본 브라우저에 Claude 로그인 페
 
 로그인은 Authorization Code + PKCE(S256) 흐름이며 `https://claude.ai/oauth/authorize` → `https://platform.claude.com/v1/oauth/token` 순으로 진행합니다. 받은 토큰은 `%LOCALAPPDATA%/AiUsageWidget/claude-auth.dat`에 **DPAPI(현재 Windows 사용자 전용)로 암호화**해 저장하며, 만료되면 refresh token으로 앱이 직접 갱신하고 회전된 토큰을 다시 저장합니다.
 
-Claude 조회는 저장된 토큰으로 `https://api.anthropic.com/api/oauth/usage`에 GET 요청합니다. 앱 로그인이 없으면 기존 Claude Code CLI 인증 파일(`%USERPROFILE%/.claude/.credentials.json`, `CLAUDE_CONFIG_DIR` 지원)을 대체 수단으로 읽습니다. **CLI 인증 파일은 읽기만 하고 절대 수정하지 않습니다.** 전체 `five_hour` / `seven_day`만 사용하며 Sonnet·Opus별 한도를 전체 주간 한도로 혼동하지 않습니다.
+Claude 조회는 저장된 토큰으로 `https://api.anthropic.com/api/oauth/usage`에 GET 요청합니다. 앱 로그인이 없으면 기존 Claude Code CLI 인증 파일(`%USERPROFILE%/.claude/.credentials.json`, `CLAUDE_CONFIG_DIR` 지원)을 대체 수단으로 읽습니다. **CLI 인증 파일은 읽기만 하고 절대 수정하지 않습니다.**
+
+기본 두 줄은 전체 한도인 `five_hour` / `seven_day`입니다. 여기에 **모델별 주간 한도를 한 줄 더** 표시하며 기본값은 Fable입니다. 모델별 한도는 응답의 `limits` 배열에서 `kind`가 `weekly_scoped`이고 `scope.model.display_name`이 일치하는 항목을 읽습니다(`seven_day_opus`·`seven_day_sonnet` 같은 키는 실제 계정에서 모두 `null`이라 쓰지 않습니다). 구형 `seven_day_<모델>` 표기도 대체 경로로 매칭합니다. 해당 모델 한도가 없거나 숫자가 없으면 줄을 추가하지 않고 기존 두 줄만 보여줍니다. 모델별 한도를 전체 주간 한도로 혼동하지 않습니다. 줄 이름은 제공자가 준 표시 이름을 그대로 씁니다.
+
+표시할 모델은 `AIUSAGE_CLAUDE_MODEL_WINDOWS`로 바꿉니다. 쉼표로 여러 개를 넣을 수 있고(`fable,opus`), 빈 값이면 전체 한도 두 줄만 남습니다. 막대 색은 위에서부터 파랑(5시간) · 초록(주간) · 주황(모델별)입니다.
+
+계정이 실제로 어떤 모델별 한도를 반환하는지 확인하려면 라이브 조회를 실행하세요. `Per-model weekly quotas:` 줄에 사용 가능한 모델 이름이 나오며, 응답 수치는 출력하지 않습니다.
+
+```powershell
+dotnet run --project tests/AiUsage.Checks -- --live-claude
+```
 
 플랜 이름은 로그인 직후 프로필 경로에서 한 번만 조회해 저장합니다. 조회에 실패하면 로그인은 그대로 성공하고 배지는 `Connected`로 표시합니다.
 
@@ -94,7 +104,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Msi
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Configuration Debug
 ```
 
-기본 실행, `-BuildOnly`, `-Msix` 모두 빌드·검증 후 `artifacts/msix/<패키지 이름>_<버전>_<아키텍처>.msix`를 생성합니다. 현재 매니페스트 기준 파일명은 `Mossworm.AiUsageWidget_1.2.4.0_x64.msix`입니다. 최신 패키지는 `artifacts/AiUsageWidget.msix`에도 복사합니다. 같은 버전은 덮어쓰고 다른 버전의 MSIX는 보존합니다. MSIX는 서명되지 않으며 개발 설치는 매니페스트 등록 방식입니다.
+기본 실행, `-BuildOnly`, `-Msix` 모두 빌드·검증 후 `artifacts/msix/<패키지 이름>_<버전>_<아키텍처>.msix`를 생성합니다. 현재 매니페스트 기준 파일명은 `Mossworm.AIUsageWidget_1.2.4.0_x64.msix`입니다. 최신 패키지는 `artifacts/AiUsageWidget.msix`에도 복사합니다. 같은 버전은 덮어쓰고 다른 버전의 MSIX는 보존합니다. MSIX는 서명되지 않으며 개발 설치는 매니페스트 등록 방식입니다.
 
 게시 파일과 패키징 로그(`resources.log`, `packaging.log`)는 `artifacts/publish/`에 생성됩니다. 매 실행 전에 준비 폴더 `artifacts/publish/package`만 비우고, MSIX와 로그는 최신 결과로 갱신합니다. `-BuildOnly`와 `-Msix`는 기존 설치를 교체하지 않으며 개발자 모드가 필요하지 않습니다. 기본 실행은 패키지 생성 후 설치까지 진행하며, 설치 성공 시 실행 파일은 `artifacts/package`에 둡니다.
 
@@ -105,7 +115,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Con
 개발 등록을 제거하려면 다음 명령을 실행하세요. 기본적으로 앱 등록만 제거하고 `%LOCALAPPDATA%/AiUsageWidget`의 설정은 보존합니다.
 
 ```powershell
-Get-AppxPackage -Name Mossworm.AiUsageWidget | Remove-AppxPackage
+Get-AppxPackage -Name Mossworm.AIUsageWidget | Remove-AppxPackage
 ```
 
 위젯 패널은 Windows가 Adaptive Card를 렌더링하므로 버튼·간격·모서리가 데스크톱 미리보기와 일부 다릅니다. 실제 패널에서의 최종 모양과 테마 전환은 설치 후 확인해야 합니다.
@@ -134,7 +144,7 @@ dotnet run --project tests/AiUsage.Checks
 
 `Customize widget` 메뉴가 열려도 설정 화면으로 바뀌지 않는다면 패키지 매니페스트의 `IWidgetProvider2` 프록시 등록을 확인하세요. 이 프로젝트는 MSIX를 직접 조립하므로 Windows App SDK의 `package.appxfragment`에 있는 사용자 지정 콜백 프록시를 데스크톱 COM용 `windows.comInterface` 형식으로 `packaging/AppxManifest.xml`에 명시합니다. `IsCustomizable`과 C# 인터페이스 구현만으로는 프로세스 간 콜백 전달이 되지 않습니다. [COM 인터페이스 등록 문서](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-com-cominterface)를 참고하세요. 매니페스트 변경 후에는 패키지 버전을 올리고, `build-install.ps1`을 실행해 빌드·검증 후 패키지를 다시 등록해야 합니다.
 
-현재 검증 결과: Codex·Claude Code·OpenCode·Command Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사를 통과했습니다. Claude OAuth는 PKCE 파라미터 생성, state 불일치 거부, 붙여넣기 형식 3종 파싱, DPAPI 저장 왕복과 평문 미노출, 만료 시 자동 갱신 및 토큰 회전 저장을 가짜 HTTP 전송으로 검증했습니다. 실제 Claude 계정 로그인은 별도 실행이 필요합니다. Codex는 실제 계정 조회를 검증했습니다. 다른 제공자의 실제 로그인 및 라이브 사용량 조회는 별도 실행이 필요합니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
+현재 검증 결과: Codex·Claude Code·OpenCode·Command Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사를 통과했습니다. Claude OAuth는 PKCE 파라미터 생성, state 불일치 거부, 붙여넣기 형식 3종 파싱, DPAPI 저장 왕복과 평문 미노출, 만료 시 자동 갱신 및 토큰 회전 저장을 가짜 HTTP 전송으로 검증했습니다. 모델별 주간 한도는 `limits`의 `weekly_scoped` 파싱·다른 모델 미매칭·구형 키 표기 매칭·빈 값 시 줄 미추가를 검증했습니다. 실제 Max 계정으로 브라우저 로그인, 사용량 조회, Fable 주간 한도 표시까지 실기 검증했습니다. Codex는 실제 계정 조회를 검증했습니다. 다른 제공자의 실제 로그인 및 라이브 사용량 조회는 별도 실행이 필요합니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
 
 v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 완료했습니다. 샘플 Status와 로그인 버튼이 포함된 실제 Setting의 라이트·다크 PNG도 확인했습니다.
 
