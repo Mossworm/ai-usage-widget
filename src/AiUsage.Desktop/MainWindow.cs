@@ -18,6 +18,9 @@ public sealed class MainWindow : Window
     readonly CancellationTokenSource lifetime = new();
     bool loginPending;
     string? loginMessage;
+    ClaudeAuthorization? codeLogin;
+    // Kept as a field so a background refresh redrawing the list cannot discard what the user typed.
+    readonly TextBox codeBox = new() { Margin = new(0, 0, 6, 0), MinWidth = 120, VerticalContentAlignment = VerticalAlignment.Center };
     readonly Preferences prefs;
     readonly UsageSnapshot demo = Catalog.Sample(DateTimeOffset.Now);
     readonly StackPanel content = new();
@@ -56,17 +59,46 @@ public sealed class MainWindow : Window
     }
     async Task FetchUsageAsync(bool force = false)
     {
-        if (sample || loginPending) return;
+        if (sample || loginPending || codeLogin is not null) return;
         try { await feed.RefreshAsync(prefs.Enabled.ToHashSet(), force, lifetime.Token); if (!lifetime.IsCancellationRequested) Refresh(); }
         catch (OperationCanceledException) { }
     }
     public async Task ConnectSubscriptionAsync(string id)
     {
         if (sample || loginPending) return;
+        if (SubscriptionLogin.RequiresCode(id)) { BeginCodeLogin(id); return; }
         loginPending = true; loginMessage = $"Complete the {SubscriptionLogin.Name(id)} login in the browser window."; Refresh();
         try { await SubscriptionLogin.ConnectAsync(id, lifetime.Token); loginMessage = null; }
         catch (OperationCanceledException) { loginMessage = "Login was canceled or timed out."; }
         catch (Exception e) when (e is UsageConnectionException or CodexException or IOException or JsonException or System.ComponentModel.Win32Exception) { loginMessage = e is UsageConnectionException or CodexException ? e.Message : "Could not start login."; }
+        finally { loginPending = false; }
+        if (!lifetime.IsCancellationRequested) { await FetchUsageAsync(true); Refresh(); }
+    }
+    // Claude hands the code back on the page instead of returning to the app, so ask for it here.
+    void BeginCodeLogin(string id)
+    {
+        codeBox.Clear();
+        try { codeLogin = SubscriptionLogin.BeginClaude(); loginMessage = $"Sign in to {SubscriptionLogin.Name(id)} in the browser, then paste the code from that page below."; }
+        catch (Exception e) when (e is UsageConnectionException or IOException or System.ComponentModel.Win32Exception) {
+            codeLogin = null; loginMessage = e is UsageConnectionException ? e.Message : "Could not start login.";
+        }
+        prefs.Settings = true; Refresh();
+        if (codeLogin is not null) codeBox.Focus();
+    }
+    void CancelCodeLogin() { codeLogin = null; codeBox.Clear(); loginMessage = null; Refresh(); }
+    async Task CompleteCodeLoginAsync()
+    {
+        if (codeLogin is not { } authorization || loginPending) return;
+        var pasted = codeBox.Text;
+        loginPending = true; loginMessage = "Completing the Claude login…"; Refresh();
+        try {
+            await SubscriptionLogin.CompleteClaudeAsync(authorization, pasted, lifetime.Token);
+            codeLogin = null; codeBox.Clear(); loginMessage = null;
+        }
+        catch (OperationCanceledException) { loginMessage = "Login was canceled or timed out."; }
+        catch (Exception e) when (e is UsageConnectionException or IOException or JsonException or System.Net.Http.HttpRequestException) {
+            loginMessage = e is UsageConnectionException ? e.Message : "Could not complete the login · check the network and try again";
+        }
         finally { loginPending = false; }
         if (!lifetime.IsCancellationRequested) { await FetchUsageAsync(true); Refresh(); }
     }
@@ -113,6 +145,7 @@ public sealed class MainWindow : Window
                     connect.SetResourceReference(Button.BackgroundProperty, "Nav");
                     connect.Click += async (_, _) => await ConnectSubscriptionAsync(service.Id);
                     DockPanel.SetDock(connect, Dock.Right); row.Children.Insert(row.Children.Count - 1, connect);
+                    if (codeLogin is not null && SubscriptionLogin.RequiresCode(service.Id)) content.Children.Add(CodeEntry());
                 }
             }
             return;
@@ -128,7 +161,7 @@ public sealed class MainWindow : Window
             var title = new WrapPanel();
             var name = Text(service.Name, size: 14); name.FontWeight = FontWeights.SemiBold; name.Margin = new(0, 0, 7, 4); title.Children.Add(name);
             var badge = new Border { Background = new SolidColorBrush(Color.FromArgb(28, iconColor.R, iconColor.G, iconColor.B)), CornerRadius = new(4), Padding = new(6, 2, 6, 2), Margin = new(0, 0, 0, 4) };
-            var label = Text(service.IsApi ? "API" : usage?.Plan ?? "Not connected", size: 10); label.FontWeight = FontWeights.SemiBold; badge.Child = label; title.Children.Add(badge); stack.Children.Add(title);
+            var label = Text(Labels.Plan(service, usage), size: 10); label.FontWeight = FontWeights.SemiBold; badge.Child = label; title.Children.Add(badge); stack.Children.Add(title);
             if (service.IsApi) stack.Children.Add(Text($"This month {Labels.Money(usage?.MonthCost)} · Today {Labels.Money(usage?.DayCost)}", true));
             else {
                 if (usage?.Status is not null) stack.Children.Add(Text(usage.Status, true));
@@ -141,6 +174,27 @@ public sealed class MainWindow : Window
             var border = new Border { Child = grid, BorderThickness = new(0, 0, 0, 1) }; border.SetResourceReference(Border.BorderBrushProperty, "Line"); content.Children.Add(border);
         }
         if (prefs.Enabled.Count == 0) { var empty = Text("No AI services to display.\nTurn on services in Settings.", true); empty.Margin = new(24, 40, 24, 40); content.Children.Add(empty); }
+    }
+    FrameworkElement CodeEntry()
+    {
+        var row = new DockPanel { Margin = new(23, 0, 25, 10) };
+        // The box outlives each redraw, so detach it from the row built last time before reusing it.
+        if (codeBox.Parent is Panel previous) previous.Children.Remove(codeBox);
+        AutomationProperties.SetName(codeBox, "Claude authorization code");
+        codeBox.IsEnabled = !loginPending;
+        var cancel = new Button { Content = "Cancel", Margin = new(6, 0, 0, 0), IsEnabled = !loginPending };
+        var submit = new Button { Content = "Complete", IsEnabled = !loginPending };
+        foreach (var button in new[] { submit, cancel }) button.SetResourceReference(Button.BackgroundProperty, "Nav");
+        cancel.Click += (_, _) => CancelCodeLogin();
+        submit.Click += async (_, _) => await CompleteCodeLoginAsync();
+        codeBox.KeyDown -= CodeEntered; codeBox.KeyDown += CodeEntered;
+        DockPanel.SetDock(cancel, Dock.Right); DockPanel.SetDock(submit, Dock.Right);
+        row.Children.Add(cancel); row.Children.Add(submit); row.Children.Add(codeBox);
+        return row;
+    }
+    async void CodeEntered(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key == System.Windows.Input.Key.Enter) { e.Handled = true; await CompleteCodeLoginAsync(); }
     }
     FrameworkElement Progress(double? value, string color)
     {

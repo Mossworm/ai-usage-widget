@@ -72,6 +72,10 @@ public static class Labels
 {
     public static UsageWindow[] Windows(Service service, UsageEntry? usage) => usage?.Windows
         ?? [new("5-hour", usage?.SessionPercent, usage?.SessionReset), new("Weekly", usage?.WeeklyPercent, usage?.WeeklyReset)];
+    // A connected account whose plan name the provider does not report must not read as disconnected.
+    public static string Plan(Service service, UsageEntry? usage) => service.IsApi ? "API"
+        : usage?.Plan is { Length: > 0 } plan ? plan
+        : usage is { Status: null, UpdatedAt: not null } ? "Connected" : "Not connected";
     public static double? RemainingPercent(double? used) => used is null || !double.IsFinite(used.Value)
         ? null
         : 100 - Math.Clamp(used.Value, 0, 100);

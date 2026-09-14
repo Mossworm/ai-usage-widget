@@ -52,7 +52,7 @@ public static class Card
             {
                 var usage = data.Services.FirstOrDefault(x => x.Id == service.Id);
                 var items = new List<object> {
-                    new { type = "TextBlock", text = $"{service.Name}  ·  {(service.IsApi ? "API" : usage?.Plan ?? "No plan connected")}", weight = "Bolder", size = "Small", spacing = "None", wrap = true }
+                    new { type = "TextBlock", text = $"{service.Name}  ·  {Labels.Plan(service, usage)}", weight = "Bolder", size = "Small", spacing = "None", wrap = true }
                 };
                 if (service.IsApi) items.Add(Text($"This month {Labels.Money(usage?.MonthCost)} · Today {Labels.Money(usage?.DayCost)}", true));
                 else

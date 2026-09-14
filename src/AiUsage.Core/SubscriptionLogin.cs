@@ -12,56 +12,36 @@ public static class SubscriptionLogin
         "aiusage:login-opencode" => "opencode",
         "aiusage:login-commandcode" => "commandcode", _ => null
     };
+    // Claude signs in through the browser and finishes with a code the user pastes back,
+    // so it cannot complete in one call the way the other subscriptions do.
+    public static bool RequiresCode(string id) => id == "claude";
     public static async Task ConnectAsync(string id, CancellationToken cancellation = default)
     {
         if (id == "chatgpt") { await CodexClient.LoginAsync(cancellation); return; }
-        if (id != "claude") {
-            var url = id switch {
-                "opencode" => "https://opencode.ai/auth",
-                "commandcode" => "https://commandcode.ai/",
-                _ => throw new ArgumentException("Unknown subscription")
-            };
-            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
-            return;
-        }
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        timeout.CancelAfter(TimeSpan.FromMinutes(5));
-        using var process = Process.Start(StartInfo(id)) ?? throw new UsageConnectionException($"Could not start {Name(id)} login");
-        var errorDrain = DrainAsync(process.StandardError, timeout.Token);
-        Task? outputDrain = null;
-        try {
-            if (id == "claude") {
-                outputDrain = DrainAsync(process.StandardOutput, timeout.Token);
-                await process.WaitForExitAsync(timeout.Token);
-                if (process.ExitCode != 0) throw new UsageConnectionException("Claude login did not complete · try connecting again");
-            }
-        } finally {
-            timeout.Cancel(); CodexExecutable.Stop(process);
-            await errorDrain; if (outputDrain is not null) await outputDrain;
-        }
-    }
-    static IEnumerable<string> Folders() => (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
-        .Concat([Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin")])
-        .Where(Path.IsPathFullyQualified).Distinct(StringComparer.OrdinalIgnoreCase);
-    static string FindFile(IEnumerable<string> paths, string name) => paths.FirstOrDefault(File.Exists) ?? throw new UsageConnectionException($"{name} CLI must be installed · run the install command in README");
-    static ProcessStartInfo StartInfo(string id)
-    {
-        var folders = Folders().ToArray();
-        var info = new ProcessStartInfo {
-            UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true,
-            RedirectStandardOutput = true, RedirectStandardError = true,
-            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)
+        // Claude cannot finish here: the browser hands the code back to the user, not to the app.
+        if (RequiresCode(id)) throw new UsageConnectionException($"Start {Name(id)} login with BeginClaude and finish it with the pasted code");
+        var url = id switch {
+            "opencode" => "https://opencode.ai/auth",
+            "commandcode" => "https://commandcode.ai/",
+            _ => throw new ArgumentException("Unknown subscription")
         };
-        if (id == "claude") {
-            info.FileName = FindFile(folders.SelectMany(f => new[] { Path.Combine(f, "claude.exe"), Path.Combine(f, "node_modules", "@anthropic-ai", "claude-code", "bin", "claude.exe") }), "Claude");
-            info.ArgumentList.Add("auth"); info.ArgumentList.Add("login"); info.ArgumentList.Add("--claudeai");
-        }
-        return info;
+        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
     }
-    static async Task DrainAsync(StreamReader reader, CancellationToken token)
+    public static ClaudeAuthorization BeginClaude()
     {
-        var buffer = new char[2048];
-        try { while (await reader.ReadAsync(buffer.AsMemory(), token) > 0) { }
-        } catch (Exception e) when (e is OperationCanceledException or IOException or ObjectDisposedException) { }
+        var authorization = ClaudeOAuth.Start();
+        ClaudeOAuth.Open(authorization);
+        return authorization;
     }
+    public static async Task CompleteClaudeAsync(ClaudeAuthorization authorization, string pasted, CancellationToken cancellation = default)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
+        timeout.CancelAfter(TimeSpan.FromMinutes(2));
+        var tokens = await ClaudeOAuth.CompleteAsync(authorization, pasted, null, timeout.Token);
+        try { new ClaudeTokenStore().Save(tokens); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.Cryptography.CryptographicException) {
+            throw new UsageConnectionException("Could not save the Claude login · check disk access and try again");
+        }
+    }
+    public static void DisconnectClaude() => new ClaudeTokenStore().Clear();
 }

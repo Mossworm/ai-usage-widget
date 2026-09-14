@@ -1,6 +1,6 @@
 # AI Usage Widget
 
-Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude Code 로그인은 Setting에서 브라우저로 연결합니다.
+Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude Code 로그인은 Setting에서 브라우저로 연결합니다. Claude Code는 CLI 설치 없이 앱이 직접 OAuth 인증을 수행합니다.
 
 - Codex, Claude Code, OpenCode, Command Code 표시 토글
 - 각 제공자: 이름·플랜, 제공자가 보고한 사용률·리셋 시간, 진행 막대
@@ -36,19 +36,28 @@ codex login
 
 ### Claude Code 연결
 
-이 PC에는 공식 Claude Code CLI 2.1.269를 설치했습니다. **지금은 로그인하지 않아도 됩니다.** 나중에 앱의 Setting에서 `Connect Claude Code`를 눌러 브라우저 인증을 완료하세요. 토글을 켜면 해당 로그인 정보로 자동 조회합니다.
+**Claude Code CLI를 설치하지 않아도 됩니다.** 앱이 직접 브라우저 인증을 수행합니다.
 
-다른 PC에서 필요한 CLI를 설치하려면:
+Setting에서 `Connect`를 누르면 기본 브라우저에 Claude 로그인 페이지가 열립니다. 로그인하면 그 페이지가 `코드#상태` 형식의 인증 코드를 보여주므로, 그 값을 Setting에 나타난 입력란에 붙여넣고 `Complete`를 누르면 연결이 끝납니다. 코드 전체 문자열, 코드 부분만, 또는 콜백 링크 전체를 붙여넣어도 인식합니다. Cancel을 누르거나 다시 `Connect`를 누르면 새 인증을 시작합니다.
 
-```powershell
-npm install -g @anthropic-ai/claude-code@2.1.269
-```
+로그인은 Authorization Code + PKCE(S256) 흐름이며 `https://claude.ai/oauth/authorize` → `https://platform.claude.com/v1/oauth/token` 순으로 진행합니다. 받은 토큰은 `%LOCALAPPDATA%/AiUsageWidget/claude-auth.dat`에 **DPAPI(현재 Windows 사용자 전용)로 암호화**해 저장하며, 만료되면 refresh token으로 앱이 직접 갱신하고 회전된 토큰을 다시 저장합니다.
 
-Claude 로그인은 `claude auth login --claudeai`를 사용합니다. 로그인 창을 닫거나 5분 동안 완료하지 않으면 재연결할 수 있습니다.
+Claude 조회는 저장된 토큰으로 `https://api.anthropic.com/api/oauth/usage`에 GET 요청합니다. 앱 로그인이 없으면 기존 Claude Code CLI 인증 파일(`%USERPROFILE%/.claude/.credentials.json`, `CLAUDE_CONFIG_DIR` 지원)을 대체 수단으로 읽습니다. **CLI 인증 파일은 읽기만 하고 절대 수정하지 않습니다.** 전체 `five_hour` / `seven_day`만 사용하며 Sonnet·Opus별 한도를 전체 주간 한도로 혼동하지 않습니다.
 
-Claude 조회는 `%USERPROFILE%/.claude/.credentials.json`의 구독 OAuth 정보를 읽어 `https://api.anthropic.com/api/oauth/usage`에 GET 요청합니다. `CLAUDE_CONFIG_DIR`을 지원합니다. 전체 `five_hour` / `seven_day`만 사용하며 Sonnet·Opus별 한도를 전체 주간 한도로 혼동하지 않습니다. CLI 인증 파일을 수정하지 않습니다. CLI가 토큰을 갱신하면 다음 조회에서 읽으며, 만료된 경우 Setting에서 재연결 안내를 표시합니다.
+플랜 이름은 로그인 직후 프로필 경로에서 한 번만 조회해 저장합니다. 조회에 실패하면 로그인은 그대로 성공하고 배지는 `Connected`로 표시합니다.
 
-Claude의 OAuth 사용량 경로는 공개 결제 API가 아닌 CLI 서비스 경로라 변경될 수 있습니다. 조회 실패·로그인 만료·429는 서비스별 상태로 표시하며 다른 서비스 갱신을 막지 않습니다. 위젯은 비밀번호 입력을 받지 않고, 읽은 토큰·계정 식별자를 사용량 데이터나 로그에 기록하지 않습니다.
+**주의.** 이 흐름은 Anthropic이 공개한 API가 아니라 Claude Code CLI의 공개 OAuth 클라이언트와 서비스 경로를 그대로 사용합니다. 즉 인증 서버에는 이 앱이 Claude Code로 보입니다. 사용 약관상 회색지대이며 Anthropic이 언제든 변경할 수 있습니다. 변경 시 재빌드 없이 고칠 수 있도록 모든 값을 환경 변수로 덮어쓸 수 있습니다.
+
+| 환경 변수 | 기본값 |
+| --- | --- |
+| `AIUSAGE_CLAUDE_CLIENT_ID` | `9d1c250a-e61b-44d9-88ed-5944d1962f5e` |
+| `AIUSAGE_CLAUDE_AUTHORIZE_URL` | `https://claude.ai/oauth/authorize` |
+| `AIUSAGE_CLAUDE_TOKEN_URL` | `https://platform.claude.com/v1/oauth/token` (실패 시 `https://console.anthropic.com/v1/oauth/token`) |
+| `AIUSAGE_CLAUDE_REDIRECT_URI` | `https://platform.claude.com/oauth/code/callback` |
+| `AIUSAGE_CLAUDE_SCOPE` | `user:inference user:profile` |
+| `AIUSAGE_CLAUDE_PROFILE_URL` | `https://api.anthropic.com/api/oauth/profile` |
+
+조회 실패·로그인 만료·429는 서비스별 상태로 표시하며 다른 서비스 갱신을 막지 않습니다. 위젯은 비밀번호를 입력받지 않고, 토큰·계정 식별자를 사용량 데이터나 로그에 기록하지 않습니다. state 불일치는 네트워크 요청 전에 거부합니다.
 
 참고: [Claude 공식 인증·저장 위치](https://code.claude.com/docs/en/authentication), [Claude 저장소의 OAuth 사용량 응답 보고](https://github.com/anthropics/claude-code/issues/31021)
 
@@ -125,7 +134,7 @@ dotnet run --project tests/AiUsage.Checks
 
 `Customize widget` 메뉴가 열려도 설정 화면으로 바뀌지 않는다면 패키지 매니페스트의 `IWidgetProvider2` 프록시 등록을 확인하세요. 이 프로젝트는 MSIX를 직접 조립하므로 Windows App SDK의 `package.appxfragment`에 있는 사용자 지정 콜백 프록시를 데스크톱 COM용 `windows.comInterface` 형식으로 `packaging/AppxManifest.xml`에 명시합니다. `IsCustomizable`과 C# 인터페이스 구현만으로는 프로세스 간 콜백 전달이 되지 않습니다. [COM 인터페이스 등록 문서](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-com-cominterface)를 참고하세요. 매니페스트 변경 후에는 패키지 버전을 올리고, `build-install.ps1`을 실행해 빌드·검증 후 패키지를 다시 등록해야 합니다.
 
-현재 검증 결과: Codex·Claude Code·OpenCode·Command Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사를 통과했습니다. Codex는 실제 계정 조회를 검증했습니다. 다른 제공자의 실제 로그인 및 라이브 사용량 조회는 별도 실행이 필요합니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
+현재 검증 결과: Codex·Claude Code·OpenCode·Command Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사를 통과했습니다. Claude OAuth는 PKCE 파라미터 생성, state 불일치 거부, 붙여넣기 형식 3종 파싱, DPAPI 저장 왕복과 평문 미노출, 만료 시 자동 갱신 및 토큰 회전 저장을 가짜 HTTP 전송으로 검증했습니다. 실제 Claude 계정 로그인은 별도 실행이 필요합니다. Codex는 실제 계정 조회를 검증했습니다. 다른 제공자의 실제 로그인 및 라이브 사용량 조회는 별도 실행이 필요합니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
 
 v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 완료했습니다. 샘플 Status와 로그인 버튼이 포함된 실제 Setting의 라이트·다크 PNG도 확인했습니다.
 
