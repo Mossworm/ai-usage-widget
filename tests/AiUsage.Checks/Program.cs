@@ -25,6 +25,24 @@ if (args.Contains("--live-claude")) {
         Environment.ExitCode = 1; return;
     }
 }
+if (args.Contains("--live-opencode")) {
+    try {
+        var usage = await new OpenCodeClient().FetchAsync();
+        Console.WriteLine(JsonSerializer.Serialize(usage, LocalStore.Json)); return;
+    } catch (Exception e) {
+        Console.Error.WriteLine(e is UsageConnectionException ? e.Message : "Live check failed: " + e.GetType().Name);
+        Environment.ExitCode = 1; return;
+    }
+}
+if (args.Contains("--live-commandcode")) {
+    try {
+        var usage = await new CommandCodeClient().FetchAsync();
+        Console.WriteLine(JsonSerializer.Serialize(usage, LocalStore.Json)); return;
+    } catch (Exception e) {
+        Console.Error.WriteLine(e is UsageConnectionException ? e.Message : "Live check failed: " + e.GetType().Name);
+        Environment.ExitCode = 1; return;
+    }
+}
 
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); Console.WriteLine("PASS " + name); passed++; }

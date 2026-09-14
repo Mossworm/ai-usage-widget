@@ -71,81 +71,306 @@ public sealed class ClaudeClient(HttpClient? http = null, string? credentialsPat
     }
 }
 
-public sealed class OpenCodeClient(HttpClient? http = null)
+public sealed class OpenCodeClient(HttpClient? http = null, string? credentialsPath = null)
 {
+    const string UsageUrl = "https://opencode.ai/zen/go/v1/usage";
     public async Task<UsageEntry> FetchAsync(CancellationToken cancellation = default)
     {
-        var key = Environment.GetEnvironmentVariable("OPENCODE_API_KEY");
-        if (string.IsNullOrWhiteSpace(key)) throw new UsageConnectionException("OpenCode login required · set OPENCODE_API_KEY");
-        using var request = new HttpRequestMessage(HttpMethod.Get, "https://opencode.ai/zen/go/v1/usage");
+        var key = await ReadApiKeyAsync(credentialsPath, cancellation);
+        if (string.IsNullOrWhiteSpace(key)) throw new UsageConnectionException("OpenCode login required · connect in Settings");
+        using var request = new HttpRequestMessage(HttpMethod.Get, UsageUrl);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         request.Headers.Accept.ParseAdd("application/json");
-        var result = await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, "OpenCode", cancellation);
-        return Parse(result, DateTimeOffset.Now);
+        JsonElement result;
+        try {
+            result = await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, "OpenCode", cancellation);
+        } catch (UsageConnectionException e) when (e.RetryAfter is null && IsAuthFailure(e)) {
+            throw new UsageConnectionException("OpenCode login required · connect in Settings");
+        }
+        try {
+            return Parse(result, DateTimeOffset.Now);
+        } catch (UsageConnectionException e) when (e.Message.Contains("response format", StringComparison.OrdinalIgnoreCase)) {
+            throw new UsageConnectionException("OpenCode login required · connect in Settings");
+        }
+    }
+    static bool IsAuthFailure(UsageConnectionException e) =>
+        e.Message.Contains("authentication", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("account access", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("(HTTP 401)", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("(HTTP 402)", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("(HTTP 403)", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("(HTTP 404)", StringComparison.OrdinalIgnoreCase);
+    internal static async Task<string?> ReadApiKeyAsync(string? overridePath, CancellationToken cancellation)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var dataHome = Environment.GetEnvironmentVariable("XDG_DATA_HOME");
+        if (string.IsNullOrWhiteSpace(dataHome)) dataHome = Path.Combine(home, ".local", "share");
+        var path = overridePath ?? Path.Combine(dataHome, "opencode", "auth.json");
+        if (File.Exists(path)) {
+            JsonElement root;
+            try {
+                if (new FileInfo(path).Length > 262144) return null;
+                using var json = JsonDocument.Parse(await File.ReadAllTextAsync(path, cancellation));
+                root = json.RootElement.Clone();
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { root = default; }
+            // OpenCode stores credentials as { "<provider>": { "type": "api", "key": "..." } }.
+            // The Go subscription shares the OPENCODE_API_KEY credential with provider id "opencode-go".
+            foreach (var id in new[] { "opencode-go", "opencode", "opencode-zen", "zen" }) {
+                var entry = Get(root, id);
+                var key = ExtractKey(entry);
+                if (!string.IsNullOrWhiteSpace(key)) return key;
+            }
+            // pi-quota-monitoring fallbacks: flat string entry, flat apiKey field, nested access/key objects.
+            foreach (var id in new[] { "opencode-go", "opencode" }) {
+                var entry = Get(root, id);
+                if (entry.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(entry.GetString())) return entry.GetString();
+            }
+            foreach (var name in new[] { "apiKey", "api_key" }) {
+                var value = Get(root, name);
+                if (value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())) return value.GetString();
+            }
+        }
+        var env = Environment.GetEnvironmentVariable("OPENCODE_API_KEY");
+        return string.IsNullOrWhiteSpace(env) ? null : env;
+    }
+    internal static string? ExtractKey(JsonElement entry)
+    {
+        if (entry.ValueKind != JsonValueKind.Object) return null;
+        foreach (var name in new[] { "key", "access", "token", "apiKey", "api_key" }) {
+            var value = Get(entry, name);
+            if (value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())) return value.GetString();
+        }
+        return null;
     }
     public static UsageEntry Parse(JsonElement result, DateTimeOffset now)
     {
         var usage = Get(result, "usage");
-        var rolling = Get(usage, "rolling");
-        if (rolling.ValueKind != JsonValueKind.Object) rolling = Get(usage, "rollingUsage");
-        var weekly = Get(usage, "weekly");
-        if (weekly.ValueKind != JsonValueKind.Object) weekly = Get(usage, "weeklyUsage");
-        var session = Number(rolling, "usagePercent");
-        var weeklyPercent = Number(weekly, "usagePercent");
-        var sessionReset = Reset(rolling, now); var weeklyReset = Reset(weekly, now);
+        if (usage.ValueKind != JsonValueKind.Object) usage = result;
+        var rolling = FirstObject(usage, "rolling", "rollingUsage");
+        // Weekly is the second window shown next to the rolling 5-hour window.
+        // Fall back to monthly when the API only reports rolling + monthly.
+        var weekly = FirstObject(usage, "weekly", "weeklyUsage");
+        var monthly = FirstObject(usage, "monthly", "monthlyUsage");
+        var session = Percent(rolling);
+        var sessionReset = Reset(rolling, now);
+        var weeklyPercent = Percent(weekly) ?? Percent(monthly);
+        var weeklyReset = Reset(weekly, now) ?? Reset(monthly, now);
         if (session is null && weeklyPercent is null) throw new UsageConnectionException("Check the OpenCode usage response format");
         return new("opencode", "Go", session, sessionReset, weeklyPercent, weeklyReset, Status: null, UpdatedAt: now);
     }
+    static JsonElement FirstObject(JsonElement parent, string first, string second)
+    {
+        var value = Get(parent, first);
+        if (value.ValueKind == JsonValueKind.Object) return value;
+        value = Get(parent, second);
+        return value.ValueKind == JsonValueKind.Object ? value : default;
+    }
+    static double? Percent(JsonElement window) => Number(window, "percent") ?? Number(window, "usagePercent");
     static double? Number(JsonElement value, string property) => Get(value, property).TryNumber(out var number) && number is >= 0 and <= 100 ? number : null;
-    static DateTimeOffset? Reset(JsonElement value, DateTimeOffset now) => Get(value, "resetInSec").TryNumber(out var seconds) && seconds >= 0 ? now.AddSeconds(seconds) : UsageHttp.Date(value, "resetAt");
+    static DateTimeOffset? Reset(JsonElement window, DateTimeOffset now)
+    {
+        if (TryDate(Get(window, "resetsAt"), out var first)) return first;
+        if (TryDate(Get(window, "resetAt"), out var second)) return second;
+        if (Get(window, "resetInSec").TryNumber(out var seconds) && seconds >= 0) return now.AddSeconds(seconds);
+        if (Get(window, "resetInMs").TryNumber(out var ms) && ms >= 0) return now.AddMilliseconds(ms);
+        return null;
+    }
+    internal static bool TryDate(JsonElement value, out DateTimeOffset time)
+    {
+        time = default;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var epoch)) {
+            try { time = epoch >= 1_000_000_000_000 ? DateTimeOffset.FromUnixTimeMilliseconds(epoch) : DateTimeOffset.FromUnixTimeSeconds(epoch); return true; }
+            catch (ArgumentOutOfRangeException) { return false; }
+        }
+        if (value.ValueKind == JsonValueKind.String) {
+            var text = value.GetString();
+            if (DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.None, out time)) return true;
+            if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)) {
+                try { time = parsed >= 1_000_000_000_000 ? DateTimeOffset.FromUnixTimeMilliseconds(parsed) : DateTimeOffset.FromUnixTimeSeconds(parsed); return true; }
+                catch (ArgumentOutOfRangeException) { return false; }
+            }
+        }
+        return false;
+    }
 }
 
-public sealed class CommandCodeClient(HttpClient? http = null)
+public sealed class CommandCodeClient(HttpClient? http = null, string? credentialsPath = null)
 {
     const string BaseUrl = "https://api.commandcode.ai";
     public async Task<UsageEntry> FetchAsync(CancellationToken cancellation = default)
     {
-        var cookie = Environment.GetEnvironmentVariable("COMMANDCODE_COOKIE");
-        if (string.IsNullOrWhiteSpace(cookie)) throw new UsageConnectionException("Command Code login required · sign in at commandcode.ai or set COMMANDCODE_COOKIE");
+        var key = await ReadApiKeyAsync(credentialsPath, cancellation);
+        if (string.IsNullOrWhiteSpace(key)) throw new UsageConnectionException("Command Code login required · connect in Settings");
         var client = http ?? UsageHttp.Client;
-        var credits = await GetAsync(client, "/internal/billing/credits", cookie, cancellation);
-        JsonElement subscription;
-        try { subscription = await GetAsync(client, "/internal/billing/subscriptions", cookie, cancellation); }
-        catch (UsageConnectionException) { subscription = default; }
-        return Parse(credits, subscription, DateTimeOffset.Now);
+        var whoami = await GetAsync(client, "/alpha/whoami", key, cancellation);
+        var orgId = OrgId(whoami);
+        var query = orgId is null ? "" : "?orgId=" + Uri.EscapeDataString(orgId);
+        var credits = await GetAsync(client, "/alpha/billing/credits" + query, key, cancellation);
+        JsonElement summary = default;
+        try { summary = await GetAsync(client, "/alpha/usage/summary" + query, key, cancellation); }
+        catch (UsageConnectionException e) when (e.RetryAfter is null) { summary = default; }
+        JsonElement subscription = default;
+        foreach (var path in new[] { "/alpha/billing/subscriptions", "/alpha/billing/subscription" }) {
+            try { subscription = await GetAsync(client, path + query, key, cancellation); break; }
+            catch (UsageConnectionException e) when (e.RetryAfter is null) { }
+        }
+        try {
+            return Parse(whoami, credits, summary, subscription, DateTimeOffset.Now);
+        } catch (UsageConnectionException e) when (e.Message.Contains("response format", StringComparison.OrdinalIgnoreCase)) {
+            throw new UsageConnectionException("Command Code login required · connect in Settings");
+        }
     }
-    static async Task<JsonElement> GetAsync(HttpClient client, string path, string cookie, CancellationToken token)
+    internal static async Task<string?> ReadApiKeyAsync(string? overridePath, CancellationToken cancellation)
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var path = overridePath ?? Path.Combine(home, ".commandcode", "auth.json");
+        if (File.Exists(path)) {
+            try {
+                if (new FileInfo(path).Length > 262144) return null;
+                using var json = JsonDocument.Parse(await File.ReadAllTextAsync(path, cancellation));
+                var root = json.RootElement.Clone();
+                // The Command Code CLI stores { "apiKey": "..." } in ~/.commandcode/auth.json.
+                foreach (var name in new[] { "apiKey", "api_key", "key", "token", "accessToken", "access" }) {
+                    var value = Get(root, name);
+                    if (value.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(value.GetString())) return value.GetString();
+                }
+                var nested = Get(root, "commandcode");
+                if (nested.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(nested.GetString())) return nested.GetString();
+                if (nested.ValueKind == JsonValueKind.Object) {
+                    var key = OpenCodeClient.ExtractKey(nested);
+                    if (!string.IsNullOrWhiteSpace(key)) return key;
+                }
+            } catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException) { }
+        }
+        foreach (var name in new[] { "COMMAND_CODE_API_KEY", "COMMANDCODE_API_KEY", "CMD_API_KEY" }) {
+            var env = Environment.GetEnvironmentVariable(name);
+            if (!string.IsNullOrWhiteSpace(env)) return env;
+        }
+        return null;
+    }
+    static string? OrgId(JsonElement whoami) =>
+        String(Get(whoami, "org"), "id")
+        ?? String(Get(whoami, "organization"), "id")
+        ?? String(whoami, "orgId")
+        ?? String(whoami, "org_id");
+    static async Task<JsonElement> GetAsync(HttpClient client, string path, string key, CancellationToken token)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, BaseUrl + path);
-        request.Headers.Add("Cookie", cookie);
-        request.Headers.Referrer = new Uri("https://commandcode.ai/");
-        request.Headers.Add("Origin", "https://commandcode.ai");
-        return await UsageHttp.SendAsync(client, request, "Command Code", token);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
+        request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.UserAgent.ParseAdd("AiUsageWidget/1.2.0");
+        try {
+            return await UsageHttp.SendAsync(client, request, "Command Code", token);
+        } catch (UsageConnectionException e) when (e.RetryAfter is null && IsAuthFailure(e)) {
+            throw new UsageConnectionException("Command Code login required · connect in Settings");
+        }
     }
-    public static UsageEntry Parse(JsonElement credits, JsonElement subscription, DateTimeOffset now)
+    static bool IsAuthFailure(UsageConnectionException e) =>
+        e.Message.Contains("authentication", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("account access", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("(HTTP 401)", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("(HTTP 402)", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("(HTTP 403)", StringComparison.OrdinalIgnoreCase)
+        || e.Message.Contains("(HTTP 404)", StringComparison.OrdinalIgnoreCase);
+    public static UsageEntry Parse(JsonElement whoami, JsonElement credits, JsonElement summary, JsonElement subscription, DateTimeOffset now)
     {
-        var root = Get(credits, "credits");
-        var monthly = Number(root, "monthlyCredits") ?? Number(root, "remainingCredits");
-        var plan = String(Get(subscription, "data"), "planId") ?? "Command Code";
-        var windows = new List<UsageWindow>();
-        CollectWindows(credits, windows, now);
-        CollectWindows(subscription, windows, now);
-        if (monthly is not null) windows.Add(new("Monthly credits", null, DateTimeOffset.TryParse(String(Get(subscription, "data"), "currentPeriodEnd"), out var end) ? end : null));
-        return new("commandcode", plan, Status: windows.Count == 0 ? "No Command Code quota data" : null, UpdatedAt: now, Windows: windows.Take(4).ToArray());
-    }
-    static void CollectWindows(JsonElement value, List<UsageWindow> windows, DateTimeOffset now)
-    {
-        if (value.ValueKind == JsonValueKind.Object) {
-            var used = Number(value, "usedPercent") ?? Number(value, "usagePercent");
-            if (used is null && Number(value, "used") is double consumed && Number(value, "limit") is double limit && limit > 0) used = consumed / limit * 100;
-            if (used is not null) {
-                var label = value.TryGetProperty("window", out var window) && window.ValueKind == JsonValueKind.String ? window.GetString()! : "Usage";
-                var reset = Reset(value, now); if (!windows.Any(x => x.Label == label)) windows.Add(new(label, used, reset));
+        // pi-quota-monitoring shape: credits.windowLimits.fiveHour/weekly { used, cap, resetAt },
+        // credits.credits { monthlyCredits, purchasedCredits, freeCredits, monthlyResetAt },
+        // usage summary { totalCost } for the monthly billing period.
+        var limits = Get(credits, "windowLimits");
+        if (limits.ValueKind != JsonValueKind.Object) limits = Get(credits, "window_limits");
+        var fiveHour = FirstObject(limits, "fiveHour", "five_hour");
+        var weeklyWindow = FirstObject(limits, "weekly", "seven_day");
+        var session = WindowPercent(fiveHour);
+        var sessionReset = WindowReset(fiveHour, now);
+        var weeklyPercent = WindowPercent(weeklyWindow);
+        var weeklyReset = WindowReset(weeklyWindow, now);
+        if (weeklyPercent is null) {
+            var monthly = MonthlyPercent(credits, summary);
+            if (monthly is not null) {
+                weeklyPercent = monthly.Value.Percent;
+                weeklyReset ??= monthly.Value.Reset;
             }
-            foreach (var property in value.EnumerateObject()) CollectWindows(property.Value, windows, now);
-        } else if (value.ValueKind == JsonValueKind.Array) foreach (var item in value.EnumerateArray()) CollectWindows(item, windows, now);
+        }
+        if (session is null && weeklyPercent is null) throw new UsageConnectionException("Check the Command Code usage response format");
+        var plan = NormalizePlan(PlanCandidate(whoami, credits, subscription)) ?? "Command Code";
+        return new("commandcode", plan, session, sessionReset, weeklyPercent, weeklyReset, Status: null, UpdatedAt: now);
     }
-    static double? Number(JsonElement value, string property) => Get(value, property).TryNumber(out var number) && double.IsFinite(number) ? number : null;
-    static DateTimeOffset? Reset(JsonElement value, DateTimeOffset now) => Get(value, "resetInSec").TryNumber(out var seconds) && seconds >= 0 ? now.AddSeconds(seconds) : UsageHttp.Date(value, "resetAt");
+    static JsonElement FirstObject(JsonElement parent, string first, string second)
+    {
+        var value = Get(parent, first);
+        if (value.ValueKind == JsonValueKind.Object) return value;
+        value = Get(parent, second);
+        return value.ValueKind == JsonValueKind.Object ? value : default;
+    }
+    static double? WindowPercent(JsonElement window)
+    {
+        if (window.ValueKind != JsonValueKind.Object) return null;
+        if (Get(window, "used").TryNumber(out var used) && used >= 0) {
+            foreach (var capName in new[] { "cap", "limit", "capAmount", "total" }) {
+                if (Get(window, capName).TryNumber(out var cap) && cap > 0)
+                    return Math.Clamp(used / cap * 100, 0, 100);
+            }
+        }
+        foreach (var name in new[] { "percent", "usagePercent", "usedPercent", "utilization" }) {
+            if (Get(window, name).TryNumber(out var direct) && direct is >= 0 and <= 100) return direct;
+        }
+        return null;
+    }
+    static DateTimeOffset? WindowReset(JsonElement window, DateTimeOffset now)
+    {
+        if (window.ValueKind != JsonValueKind.Object) return null;
+        if (OpenCodeClient.TryDate(Get(window, "resetAt"), out var first)) return first;
+        if (OpenCodeClient.TryDate(Get(window, "resetsAt"), out var second)) return second;
+        if (OpenCodeClient.TryDate(Get(window, "reset"), out var third)) return third;
+        if (Get(window, "resetInSec").TryNumber(out var seconds) && seconds >= 0) return now.AddSeconds(seconds);
+        if (Get(window, "resetInMs").TryNumber(out var ms) && ms >= 0) return now.AddMilliseconds(ms);
+        return UsageHttp.Date(window, "resetAt");
+    }
+    static (double Percent, DateTimeOffset? Reset)? MonthlyPercent(JsonElement credits, JsonElement summary)
+    {
+        var wallet = Get(credits, "credits");
+        if (wallet.ValueKind != JsonValueKind.Object) wallet = credits;
+        var monthly = Amount(wallet, "monthlyCredits") ?? Amount(wallet, "monthly");
+        var purchased = Amount(wallet, "purchasedCredits") ?? 0;
+        var free = Amount(wallet, "freeCredits") ?? Amount(wallet, "free") ?? 0;
+        var spent = Amount(summary, "totalCost") ?? Amount(summary, "total") ?? Amount(Get(summary, "usage"), "totalCost");
+        if (monthly is null && purchased == 0 && free == 0) return null;
+        var remaining = (monthly ?? 0) + purchased + free;
+        var total = remaining + (spent ?? 0);
+        if (total <= 0 || spent is null || spent < 0) return null;
+        DateTimeOffset? reset = null;
+        if (!OpenCodeClient.TryDate(Get(wallet, "monthlyResetAt"), out var monthlyReset)) monthlyReset = default;
+        else reset = monthlyReset;
+        reset ??= NextMonthStart(DateTimeOffset.Now);
+        return (Math.Clamp(spent.Value / total * 100, 0, 100), reset);
+    }
+    static double? Amount(JsonElement value, string property) => Get(value, property).TryNumber(out var number) && double.IsFinite(number) ? number : null;
+    static DateTimeOffset NextMonthStart(DateTimeOffset now) => new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, now.Offset).AddMonths(1);
+    static string? PlanCandidate(JsonElement whoami, JsonElement credits, JsonElement subscription)
+    {
+        var data = Get(subscription, "data");
+        if (data.ValueKind != JsonValueKind.Object) data = subscription;
+        foreach (var node in new[] { data, Get(data, "subscription"), Get(data, "plan"), whoami, Get(whoami, "org"), Get(whoami, "organization"), Get(whoami, "user"), Get(whoami, "subscription"), credits, Get(credits, "subscription") }) {
+            foreach (var name in new[] { "planId", "plan_id", "plan", "planName", "plan_name", "tier", "name", "slug" }) {
+                var value = String(node, name);
+                if (!string.IsNullOrWhiteSpace(value)) return value;
+            }
+        }
+        return null;
+    }
+    public static string? NormalizePlan(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var lower = raw.ToLowerInvariant();
+        if (lower.Contains("goat")) return "Goat";
+        if (lower.Contains("max")) return "Max";
+        if (lower.Contains("team")) return "Team";
+        if (lower.Contains("provider")) return "Provider";
+        if (lower.Contains("ultra")) return "Ultra";
+        if (lower.Contains("pro")) return "Pro";
+        if (lower.Contains("go")) return "Go";
+        return raw.Trim().Length is > 0 and <= 32 ? raw.Trim() : null;
+    }
 }
 

@@ -54,10 +54,10 @@ Claude의 OAuth 사용량 경로는 공개 결제 API가 아닌 CLI 서비스 �
 
 ### OpenCode 연결
 
-- **OpenCode**: OpenCode Go API `https://opencode.ai/zen/go/v1/usage`를 호출합니다. API 키를 `OPENCODE_API_KEY`에 지정하면 rolling 5시간과 weekly 사용량을 읽습니다.
-- **Command Code**: `COMMANDCODE_COOKIE`의 브라우저 `Cookie` 헤더로 `api.commandcode.ai/internal/billing/credits`와 subscription billing endpoint를 호출합니다. 먼저 [commandcode.ai](https://commandcode.ai)에 로그인한 뒤 Cookie 헤더를 지정하세요.
+- **OpenCode**: 구독 중이면 플랜을 `Go`로 표시하고 OpenCode Go API `https://opencode.ai/zen/go/v1/usage`에서 rolling 5시간과 weekly 사용량·리셋 시간을 다른 서비스와 같은 형식으로 읽습니다. API 키는 `~/.local/share/opencode/auth.json`의 `opencode-go` 항목(`{ "type": "api", "key": "..." }`)에서 가져오며, 없으면 `OPENCODE_API_KEY` 환경 변수를 대신 사용합니다. 둘 다 없으면 `OpenCode login required · connect in Settings`를 표시합니다.
+- **Command Code**: 구독 중이면 플랜을 `Go`/`Goat`/`Pro`(그 외 `Max`·`Team`·`Provider` 등) 표기로 정규화해 표시하고, `https://api.commandcode.ai`의 `/alpha/whoami` → `/alpha/billing/credits` + `/alpha/usage/summary` 응답(`windowLimits.fiveHour`/`weekly`의 `used`/`cap`·`resetAt`, 월간 `monthlyCredits` 대비 `totalCost`)으로 5시간과 weekly 사용량·리셋 시간을 다른 서비스와 같은 형식으로 읽습니다. API 키는 `~/.commandcode/auth.json`의 `apiKey`에서 가져오며, 없으면 `COMMAND_CODE_API_KEY`(`COMMANDCODE_API_KEY`, `CMD_API_KEY`도 지원) 환경 변수를 대신 사용합니다. 둘 다 없거나 사용량을 찾지 못하면 `Command Code login required · connect in Settings`를 표시합니다.
 
-두 서비스의 `Connect` 버튼은 각 로그인 페이지를 기본 브라우저에서 엽니다. 로그인 후 앱을 새로고침하면 로컬 credential 또는 환경 변수/쿠키를 사용해 자동 조회합니다.
+두 서비스의 `Connect` 버튼은 각 로그인 페이지를 기본 브라우저에서 엽니다. 로그인 후 앱을 새로고침하면 로컬 credential 또는 환경 변수를 사용해 자동 조회합니다.
 
 빌드 결과가 있으면 `artifacts/package/Desktop/AiUsage.Desktop.exe`를 실행하세요. 이 실행 파일은 데스크톱 미리보기이며 위젯 패널 등록은 아래 단계가 필요합니다.
 
@@ -134,7 +134,8 @@ v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 �
 ```powershell
 dotnet run --project tests/AiUsage.Checks -- --live
 dotnet run --project tests/AiUsage.Checks -- --live-claude
-dotnet run --project tests/AiUsage.Checks -- --live-claude
+dotnet run --project tests/AiUsage.Checks -- --live-opencode
+dotnet run --project tests/AiUsage.Checks -- --live-commandcode
 ```
 
 Codex 연결 참고: [공식 App Server 문서](https://learn.chatgpt.com/docs/app-server), [공식 인증 문서](https://learn.chatgpt.com/docs/auth). 사용자 제공 예제인 [spourdei/codex-usage-widget](https://github.com/spourdei/codex-usage-widget)과 [ZeroP27/codex-usage](https://github.com/ZeroP27/codex-usage)의 RPC 방식·시간 창 매핑을 참고하여 C#으로 별도 구현했습니다. 외부 프로젝트의 OAuth 토큰 직접 관리·계정 전환·리셋 크레딧 기능은 포함하지 않습니다.
