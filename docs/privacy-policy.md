@@ -16,11 +16,10 @@ AI Usage Widget(이하 "앱")은 이용자의 개인정보를 **수집·전송·
 ### 3. 이용자 기기에만 저장되는 정보
 다음 항목은 이용자의 Windows PC에만 저장되며 외부로 전송되지 않습니다.
 
-- **Claude 인증 토큰**: 앱에서 Claude에 로그인한 경우, 발급된 액세스/갱신 토큰을 `%LOCALAPPDATA%\AiUsageWidget\claude-auth.dat`에 Windows DPAPI로 암호화해 저장합니다. 해당 파일은 현재 Windows 사용자 계정에서만 복호화할 수 있습니다.
 - **위젯 표시 설정**: 표시할 서비스 목록 등 설정은 Windows 위젯 호스트의 CustomState에 저장됩니다. 데스크톱 미리보기 설정은 별도의 로컬 설정으로 저장됩니다.
 - **사용량 수치**: 제공자로부터 조회한 사용률·리셋 시간은 메모리에만 보관하며 앱이 디스크에 기록하지 않습니다. 다만 이용자가 별도의 수집 도구로 `%LOCALAPPDATA%\AiUsageWidget\usage.json` 스냅샷을 만들어 둔 경우 앱은 그 파일을 읽습니다.
 
-앱은 비밀번호를 요구하거나 저장하지 않습니다. 로그인은 각 제공자의 공식 웹 페이지(브라우저)에서 이루어집니다.
+앱은 자체 로그인 화면이 없고 인증 토큰을 저장하지 않습니다. 비밀번호를 요구하거나 저장하지도 않습니다. 로그인은 전적으로 이미 설치된 각 CLI가 담당합니다.
 
 ### 4. 읽기 전용으로 접근하는 기존 자격 증명 파일
 이미 설치된 CLI에 로그인되어 있는 경우, 앱은 사용량 조회에 필요한 범위에서 아래 파일 및 로컬 프로세스를 **읽기만** 합니다. 수정·삭제하지 않으며, 그 내용을 개발자나 제3자에게 전송하지 않습니다.
@@ -29,15 +28,15 @@ AI Usage Widget(이하 "앱")은 이용자의 개인정보를 **수집·전송·
 - Claude Code CLI: `%USERPROFILE%\.claude\.credentials.json` (`CLAUDE_CONFIG_DIR` 지원)
 
 ### 5. 네트워크 통신
-앱은 이용자가 연결한 서비스의 공식 엔드포인트에만 직접 연결합니다. 중계 서버는 사용하지 않습니다.
+앱은 표시 대상 서비스의 공식 엔드포인트에만 직접 연결합니다. 중계 서버는 사용하지 않습니다.
 
-- `api.anthropic.com`, `claude.ai`, `platform.claude.com`, `console.anthropic.com` (Anthropic)
+- `api.anthropic.com` (Anthropic)
 - Codex 사용량은 로컬 Codex 프로세스를 통해 OpenAI 서비스에서 조회됩니다.
 
 이 통신에는 해당 서비스 제공자의 개인정보 처리방침 및 이용약관이 적용됩니다. 앱은 프롬프트 실행이나 모델 호출을 하지 않으며, 계정 사용량 정보만 조회합니다.
 
 ### 6. 데이터 삭제
-- 앱 내 Setting에서 연결을 해제하거나, `%LOCALAPPDATA%\AiUsageWidget` 폴더를 삭제하면 저장된 토큰이 제거됩니다.
+- 앱이 저장하는 토큰은 없습니다. 로그아웃은 Claude Code 또는 Codex CLI에서 직접 하시면 되고, `%LOCALAPPDATA%\AiUsageWidget` 폴더를 삭제하면 앱 자체 설정과 사용량 스냅샷이 제거됩니다.
 - 앱을 제거하면 앱이 저장한 로컬 데이터가 함께 제거됩니다.
 - 각 서비스 계정에 저장된 정보의 삭제는 해당 제공자에게 요청해야 합니다.
 
@@ -63,11 +62,10 @@ None. The app sends no personal information to the developer or to any third par
 ### 3. Information stored only on your device
 The following stays on your Windows PC and is never transmitted anywhere by the app:
 
-- **Claude authentication tokens.** If you sign in to Claude from the app, the issued access and refresh tokens are stored at `%LOCALAPPDATA%\AiUsageWidget\claude-auth.dat`, encrypted with Windows DPAPI so that only your Windows user account can decrypt them.
 - **Widget display settings.** Which services to show and related preferences are stored in the Windows widget host's CustomState; the desktop preview keeps its own local settings.
 - **Usage figures.** Usage percentages and reset times fetched from providers are kept in memory only; the app does not write them to disk. If you separately run a collector that writes a `%LOCALAPPDATA%\AiUsageWidget\usage.json` snapshot, the app reads that file.
 
-The app never asks for or stores passwords. Sign-in happens on each provider's own web page in your browser.
+The app has no sign-in screen of its own and stores no authentication token. It never asks for or stores passwords; signing in is handled entirely by the CLIs already installed on your PC.
 
 ### 4. Existing credential files accessed read-only
 If you already have the relevant CLIs installed and signed in, the app **reads only** the following, solely to query your usage. It never modifies or deletes them, and never sends their contents to the developer or anyone else:
@@ -76,15 +74,15 @@ If you already have the relevant CLIs installed and signed in, the app **reads o
 - Claude Code CLI: `%USERPROFILE%\.claude\.credentials.json` (honors `CLAUDE_CONFIG_DIR`)
 
 ### 5. Network connections
-The app connects directly to the official endpoints of the services you choose to connect. No relay or intermediary server is used.
+The app connects directly to the official endpoints of the services it displays. No relay or intermediary server is used.
 
-- `api.anthropic.com`, `claude.ai`, `platform.claude.com`, `console.anthropic.com` (Anthropic)
+- `api.anthropic.com` (Anthropic)
 - Codex usage is retrieved from OpenAI's service through the local Codex process.
 
 These connections are governed by the respective provider's privacy policy and terms. The app does not run prompts or invoke models; it only reads account usage information.
 
 ### 6. Deleting your data
-- Disconnect a service in the app's Settings, or delete the `%LOCALAPPDATA%\AiUsageWidget` folder, to remove stored tokens.
+- The app stores no token to remove. To sign out, sign out of the Claude Code or Codex CLI itself; deleting the `%LOCALAPPDATA%\AiUsageWidget` folder removes the app's own settings and any usage snapshot.
 - Uninstalling the app removes the local data it stored.
 - To delete data held in your provider accounts, contact that provider.
 

@@ -1,6 +1,6 @@
 # AI Usage Widget
 
-Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude Code 로그인은 Setting에서 브라우저로 연결합니다. Claude Code는 CLI 설치 없이 앱이 직접 OAuth 인증을 수행합니다.
+Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. 연결 절차는 없습니다. PC에 이미 설치된 Codex·Claude Code CLI의 로그인을 그대로 읽어 씁니다.
 
 - Codex, Claude Code 표시 토글
 - 각 제공자: 이름·플랜, 제공자가 보고한 사용률·리셋 시간, 진행 막대
@@ -17,7 +17,7 @@ Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니�
 
 Codex CLI가 이미 설치되고 ChatGPT 계정으로 로그인되어 있으면 앱 실행 시 자동 연결됩니다. 이 PC에서 실제 조회를 검증했습니다.
 
-처음 연결하거나 인증이 만료된 경우 데스크톱 앱의 **Setting → Codex 로그인 / 다시 연결**을 누르고 열린 브라우저에서 로그인하세요. 위젯 패널에서는 위젯의 `...` 메뉴에서 **Customize widget**을 선택해 Setting 화면으로 전환한 뒤 같은 연결 버튼을 사용할 수 있습니다. 비밀번호는 브라우저의 OpenAI 로그인 화면에서 직접 입력합니다. 위젯 카드 상단의 Status / Setting 버튼은 표시하지 않으며, 데스크톱 미리보기의 탭은 유지합니다.
+로그인한 적이 없거나 인증이 만료되면 터미널에서 `codex login`을 한 번 실행하세요. 앱에는 로그인 버튼이 없습니다. 위젯 카드 상단의 Status / Setting 버튼은 표시하지 않으며, 데스크톱 미리보기의 탭은 유지합니다.
 
 CLI가 없다면 설치하고 로그인하세요.
 
@@ -26,7 +26,13 @@ npm install -g @openai/codex
 codex login
 ```
 
-앱은 PATH의 `codex.exe` 또는 npm 설치 경로의 네이티브 실행 파일을 찾습니다. 다른 위치라면 `CODEX_BIN`에 `codex.exe`의 절대 경로를 지정한 뒤 앱을 다시 실행하세요. `CODEX_HOME`은 Codex가 기존 환경 설정대로 사용합니다. API 키 로그인은 이 구독 한도 조회용으로 사용하지 않습니다.
+앱은 아래 위치를 모두 후보로 모은 뒤 **가장 최근에 갱신된 `codex.exe`** 를 씁니다. 설치 방식이 여러 개여도 오래된 바이너리에 걸리지 않습니다.
+
+1. PATH의 `codex.exe`, 그리고 전역 npm(`%APPDATA%/npm`)·`Program Files/nodejs` 아래의 네이티브 실행 파일
+2. 단독 설치본의 버전별 폴더 `%LOCALAPPDATA%/OpenAI/Codex/bin/<버전>/codex.exe`
+3. VS Code 계열 에디터의 `openai.chatgpt-*` 확장에 동봉된 `bin/windows-x86_64/codex.exe` (`.vscode`, `.vscode-insiders`, `.windsurf`, `.cursor`)
+
+특정 바이너리를 고정하려면 `CODEX_EXECUTABLE`(또는 기존 이름 `CODEX_BIN`)에 `codex.exe`의 절대 경로를 지정하세요. 이 값이 있으면 탐색을 건너뛰고 그 파일만 씁니다. `CODEX_HOME`은 Codex가 기존 환경 설정대로 사용합니다. API 키 로그인은 이 구독 한도 조회용으로 사용하지 않습니다.
 
 구현은 로컬 `codex app-server --listen stdio://`에 `initialize` → `initialized` → `account/read` → `account/rateLimits/read` 순서로 요청합니다. 프롬프트 실행이나 모델 호출은 하지 않습니다. 로그인은 공식 `codex login`이 담당합니다. 위젯은 `auth.json`, 비밀번호, 액세스 토큰, 갱신 토큰을 읽거나 별도로 저장하지 않으며, 이메일·계정 ID도 저장하지 않습니다. 사용량은 메모리에만 보관합니다.
 
@@ -36,13 +42,11 @@ codex login
 
 ### Claude Code 연결
 
-**Claude Code CLI를 설치하지 않아도 됩니다.** 앱이 직접 브라우저 인증을 수행합니다.
+**Claude Code CLI의 로그인을 그대로 사용합니다.** 앱에는 로그인 화면도, 연결 버튼도 없습니다.
 
-Setting에서 `Connect`를 누르면 기본 브라우저에 Claude 로그인 페이지가 열립니다. 로그인하면 그 페이지가 `코드#상태` 형식의 인증 코드를 보여주므로, 그 값을 Setting에 나타난 입력란에 붙여넣고 `Complete`를 누르면 연결이 끝납니다. 코드 전체 문자열, 코드 부분만, 또는 콜백 링크 전체를 붙여넣어도 인식합니다. Cancel을 누르거나 다시 `Connect`를 누르면 새 인증을 시작합니다.
+Claude 조회는 Claude Code CLI 인증 파일(`%USERPROFILE%/.claude/.credentials.json`, `CLAUDE_CONFIG_DIR` 지원)에서 `claudeAiOauth.accessToken`을 읽어 `https://api.anthropic.com/api/oauth/usage`에 GET 요청합니다. 플랜 배지는 같은 파일의 `subscriptionType`을 씁니다. **인증 파일은 읽기만 하고 절대 수정하지 않습니다.** 앱은 자체 토큰을 저장하지 않습니다.
 
-로그인은 Authorization Code + PKCE(S256) 흐름이며 `https://claude.ai/oauth/authorize` → `https://platform.claude.com/v1/oauth/token` 순으로 진행합니다. 받은 토큰은 `%LOCALAPPDATA%/AiUsageWidget/claude-auth.dat`에 **DPAPI(현재 Windows 사용자 전용)로 암호화**해 저장하며, 만료되면 refresh token으로 앱이 직접 갱신하고 회전된 토큰을 다시 저장합니다.
-
-Claude 조회는 저장된 토큰으로 `https://api.anthropic.com/api/oauth/usage`에 GET 요청합니다. 앱 로그인이 없으면 기존 Claude Code CLI 인증 파일(`%USERPROFILE%/.claude/.credentials.json`, `CLAUDE_CONFIG_DIR` 지원)을 대체 수단으로 읽습니다. **CLI 인증 파일은 읽기만 하고 절대 수정하지 않습니다.**
+파일의 `expiresAt`이 지났으면 요청을 보내지 않고 `Claude Code sign-in expired · open Claude Code to refresh it`을 표시합니다. 파일에 함께 들어 있는 refresh token은 **일부러 쓰지 않습니다.** 갱신하면 토큰이 회전되어 실행 중인 CLI가 가진 값이 무효가 되고, 사용자가 Claude Code에서 로그아웃되기 때문입니다. 갱신은 Claude Code를 한 번 실행하면 CLI가 알아서 처리합니다.
 
 기본 두 줄은 전체 한도인 `five_hour` / `seven_day`입니다. 여기에 **모델별 주간 한도를 한 줄 더** 표시하며 기본값은 Fable입니다. 모델별 한도는 응답의 `limits` 배열에서 `kind`가 `weekly_scoped`이고 `scope.model.display_name`이 일치하는 항목을 읽습니다(`seven_day_opus`·`seven_day_sonnet` 같은 키는 실제 계정에서 모두 `null`이라 쓰지 않습니다). 구형 `seven_day_<모델>` 표기도 대체 경로로 매칭합니다. 해당 모델 한도가 없거나 숫자가 없으면 줄을 추가하지 않고 기존 두 줄만 보여줍니다. 모델별 한도를 전체 주간 한도로 혼동하지 않습니다. 줄 이름은 제공자가 준 표시 이름을 그대로 씁니다.
 
@@ -54,20 +58,15 @@ Claude 조회는 저장된 토큰으로 `https://api.anthropic.com/api/oauth/usa
 dotnet run --project tests/AiUsage.Checks -- --live-claude
 ```
 
-플랜 이름은 로그인 직후 프로필 경로에서 한 번만 조회해 저장합니다. 조회에 실패하면 로그인은 그대로 성공하고 배지는 `Connected`로 표시합니다.
-
-**주의.** 이 흐름은 Anthropic이 공개한 API가 아니라 Claude Code CLI의 공개 OAuth 클라이언트와 서비스 경로를 그대로 사용합니다. 즉 인증 서버에는 이 앱이 Claude Code로 보입니다. 사용 약관상 회색지대이며 Anthropic이 언제든 변경할 수 있습니다. 변경 시 재빌드 없이 고칠 수 있도록 모든 값을 환경 변수로 덮어쓸 수 있습니다.
+**주의.** `/api/oauth/usage`는 Anthropic이 공개한 API가 아니라 Claude Code CLI가 쓰는 비공개 경로입니다. 요청에는 CLI의 `anthropic-beta: oauth-2025-04-20` 헤더와 User-Agent를 그대로 실어 보내므로, 서버에는 이 앱이 Claude Code로 보입니다. 사용 약관상 회색지대이며 Anthropic이 언제든 바꿀 수 있습니다. 변경 시 재빌드 없이 고칠 수 있도록 값을 환경 변수로 덮어쓸 수 있습니다.
 
 | 환경 변수 | 기본값 |
 | --- | --- |
-| `AIUSAGE_CLAUDE_CLIENT_ID` | `9d1c250a-e61b-44d9-88ed-5944d1962f5e` |
-| `AIUSAGE_CLAUDE_AUTHORIZE_URL` | `https://claude.ai/oauth/authorize` |
-| `AIUSAGE_CLAUDE_TOKEN_URL` | `https://platform.claude.com/v1/oauth/token` (실패 시 `https://console.anthropic.com/v1/oauth/token`) |
-| `AIUSAGE_CLAUDE_REDIRECT_URI` | `https://platform.claude.com/oauth/code/callback` |
-| `AIUSAGE_CLAUDE_SCOPE` | `user:inference user:profile` |
-| `AIUSAGE_CLAUDE_PROFILE_URL` | `https://api.anthropic.com/api/oauth/profile` |
+| `AIUSAGE_CLAUDE_USER_AGENT` | `claude-code/0.2.29` |
+| `AIUSAGE_CLAUDE_MODEL_WINDOWS` | `fable` |
+| `CLAUDE_CONFIG_DIR` | `%USERPROFILE%/.claude` |
 
-조회 실패·로그인 만료·429는 서비스별 상태로 표시하며 다른 서비스 갱신을 막지 않습니다. 위젯은 비밀번호를 입력받지 않고, 토큰·계정 식별자를 사용량 데이터나 로그에 기록하지 않습니다. state 불일치는 네트워크 요청 전에 거부합니다.
+조회 실패·로그인 만료·429는 서비스별 상태로 표시하며 다른 서비스 갱신을 막지 않습니다. 위젯은 비밀번호를 입력받지 않고, 토큰·계정 식별자를 사용량 데이터나 로그에 기록하지 않습니다.
 
 참고: [Claude 공식 인증·저장 위치](https://code.claude.com/docs/en/authentication), [Claude 저장소의 OAuth 사용량 응답 보고](https://github.com/anthropics/claude-code/issues/31021)
 
@@ -145,7 +144,7 @@ dotnet run --project tests/AiUsage.Checks
 
 `Customize widget` 메뉴가 열려도 설정 화면으로 바뀌지 않는다면 패키지 매니페스트의 `IWidgetProvider2` 프록시 등록을 확인하세요. 이 프로젝트는 MSIX를 직접 조립하므로 Windows App SDK의 `package.appxfragment`에 있는 사용자 지정 콜백 프록시를 데스크톱 COM용 `windows.comInterface` 형식으로 `packaging/AppxManifest.xml`에 명시합니다. `IsCustomizable`과 C# 인터페이스 구현만으로는 프로세스 간 콜백 전달이 되지 않습니다. [COM 인터페이스 등록 문서](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-com-cominterface)를 참고하세요. 매니페스트 변경 후에는 패키지 버전을 올리고, `build-install.ps1`을 실행해 빌드·검증 후 패키지를 다시 등록해야 합니다.
 
-현재 검증 결과: Codex·Claude Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사를 통과했습니다. Claude OAuth는 PKCE 파라미터 생성, state 불일치 거부, 붙여넣기 형식 3종 파싱, DPAPI 저장 왕복과 평문 미노출, 만료 시 자동 갱신 및 토큰 회전 저장을 가짜 HTTP 전송으로 검증했습니다. 모델별 주간 한도는 `limits`의 `weekly_scoped` 파싱·다른 모델 미매칭·구형 키 표기 매칭·빈 값 시 줄 미추가를 검증했습니다. 실제 Max 계정으로 브라우저 로그인, 사용량 조회, Fable 주간 한도 표시까지 실기 검증했습니다. Codex는 실제 계정 조회를 검증했습니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
+현재 검증 결과: Codex·Claude Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사를 통과했습니다. Claude는 CLI 인증 파일이 없을 때와 만료됐을 때 네트워크 요청 없이 안내 문구를 내는지, 요청이 CLI User-Agent로 나가는지, Setting 카드에 로그인 진입점이 남아 있지 않은지를 검증했습니다. 모델별 주간 한도는 `limits`의 `weekly_scoped` 파싱·다른 모델 미매칭·구형 키 표기 매칭·빈 값 시 줄 미추가를 검증했습니다. 실제 Max 계정에서 CLI 인증 파일만으로 사용량 조회와 Fable 주간 한도 표시까지 실기 검증했습니다. Codex도 실제 계정 조회를 검증했습니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
 
 v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 완료했습니다. 샘플 Status와 로그인 버튼이 포함된 실제 Setting의 라이트·다크 PNG도 확인했습니다.
 

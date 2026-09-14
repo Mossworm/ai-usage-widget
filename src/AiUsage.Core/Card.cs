@@ -23,13 +23,6 @@ public static class Card
                     selectAction = Action($"{service.Name} {(enabled ? "turn off" : "turn on")}", "toggle:" + service.Id),
                     columns = new[] {
                         Column([Text(service.Name)]),
-                        !data.IsSample ? Column([new { type = "ActionSet", actions = new[] {
-                            new { type = "Action.OpenUrl", title = "Connect", url = service.Id switch {
-                                "chatgpt" => "aiusage:login",
-                                "claude" => "aiusage:login-claude",
-                                _ => "https://example.invalid"
-                            } }
-                        } }], "auto") : Column([]),
                         Column([new { type = "Image", url = ToggleImage(enabled), width = "34px", height = "20px", altText = enabled ? "On" : "Off" }], "auto")
                     }
                 });

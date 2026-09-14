@@ -13,7 +13,6 @@
     <Application Id="App" Executable="Desktop\AiUsage.Desktop.exe" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements DisplayName="AI Usage Widget" Description="ms-resource:AppDescription" BackgroundColor="transparent" Square150x150Logo="Assets\Logo.png" Square44x44Logo="Assets\SmallLogo.png" />
       <Extensions>
-        <uap:Extension Category="windows.protocol"><uap:Protocol Name="aiusage"><uap:DisplayName>AI Usage Codex Login</uap:DisplayName></uap:Protocol></uap:Extension>
         <com:Extension Category="windows.comServer"><com:ComServer>
           <com:ExeServer Executable="Provider\AiUsage.Provider.exe" DisplayName="AI Usage Provider">
             <com:Class Id="D43F207B-60E5-40DB-A084-980655913C8C" DisplayName="AI Usage Provider" />

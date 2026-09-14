@@ -1,5 +1,4 @@
 using System.IO;
-using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -16,11 +15,8 @@ public sealed class MainWindow : Window
     readonly bool sample;
     readonly SubscriptionFeed feed = new();
     readonly CancellationTokenSource lifetime = new();
-    bool loginPending;
-    string? loginMessage;
-    ClaudeAuthorization? codeLogin;
-    // Kept as a field so a background refresh redrawing the list cannot discard what the user typed.
-    readonly TextBox codeBox = new() { Margin = new(0, 0, 6, 0), MinWidth = 120, VerticalContentAlignment = VerticalAlignment.Center };
+    // Shown under the service list when saving preferences fails; connections need no prompt.
+    string? notice;
     readonly Preferences prefs;
     readonly UsageSnapshot demo = Catalog.Sample(DateTimeOffset.Now);
     readonly StackPanel content = new();
@@ -59,48 +55,9 @@ public sealed class MainWindow : Window
     }
     async Task FetchUsageAsync(bool force = false)
     {
-        if (sample || loginPending || codeLogin is not null) return;
+        if (sample) return;
         try { await feed.RefreshAsync(prefs.Enabled.ToHashSet(), force, lifetime.Token); if (!lifetime.IsCancellationRequested) Refresh(); }
         catch (OperationCanceledException) { }
-    }
-    public async Task ConnectSubscriptionAsync(string id)
-    {
-        if (sample || loginPending) return;
-        if (SubscriptionLogin.RequiresCode(id)) { BeginCodeLogin(id); return; }
-        loginPending = true; loginMessage = $"Complete the {SubscriptionLogin.Name(id)} login in the browser window."; Refresh();
-        try { await SubscriptionLogin.ConnectAsync(id, lifetime.Token); loginMessage = null; }
-        catch (OperationCanceledException) { loginMessage = "Login was canceled or timed out."; }
-        catch (Exception e) when (e is UsageConnectionException or CodexException or IOException or JsonException or System.ComponentModel.Win32Exception) { loginMessage = e is UsageConnectionException or CodexException ? e.Message : "Could not start login."; }
-        finally { loginPending = false; }
-        if (!lifetime.IsCancellationRequested) { await FetchUsageAsync(true); Refresh(); }
-    }
-    // Claude hands the code back on the page instead of returning to the app, so ask for it here.
-    void BeginCodeLogin(string id)
-    {
-        codeBox.Clear();
-        try { codeLogin = SubscriptionLogin.BeginClaude(); loginMessage = $"Sign in to {SubscriptionLogin.Name(id)} in the browser, then paste the code from that page below."; }
-        catch (Exception e) when (e is UsageConnectionException or IOException or System.ComponentModel.Win32Exception) {
-            codeLogin = null; loginMessage = e is UsageConnectionException ? e.Message : "Could not start login.";
-        }
-        prefs.Settings = true; Refresh();
-        if (codeLogin is not null) codeBox.Focus();
-    }
-    void CancelCodeLogin() { codeLogin = null; codeBox.Clear(); loginMessage = null; Refresh(); }
-    async Task CompleteCodeLoginAsync()
-    {
-        if (codeLogin is not { } authorization || loginPending) return;
-        var pasted = codeBox.Text;
-        loginPending = true; loginMessage = "Completing the Claude login…"; Refresh();
-        try {
-            await SubscriptionLogin.CompleteClaudeAsync(authorization, pasted, lifetime.Token);
-            codeLogin = null; codeBox.Clear(); loginMessage = null;
-        }
-        catch (OperationCanceledException) { loginMessage = "Login was canceled or timed out."; }
-        catch (Exception e) when (e is UsageConnectionException or IOException or JsonException or System.Net.Http.HttpRequestException) {
-            loginMessage = e is UsageConnectionException ? e.Message : "Could not complete the login · check the network and try again";
-        }
-        finally { loginPending = false; }
-        if (!lifetime.IsCancellationRequested) { await FetchUsageAsync(true); Refresh(); }
     }
     void ThemeChanged(object sender, UserPreferenceChangedEventArgs e) => Dispatcher.BeginInvoke(() => { ApplyTheme(); Refresh(); });
     void ApplyTheme(bool? forceDark = null)
@@ -125,8 +82,8 @@ public sealed class MainWindow : Window
         settings.SetResourceReference(Button.BackgroundProperty, prefs.Settings ? "Selected" : "Nav");
         content.Children.Clear();
         var data = sample ? demo : feed.Read(prefs.Enabled);
-        footer.Text = prefs.Settings ? loginMessage ?? "" : "";
-        footer.Visibility = prefs.Settings && loginMessage is not null ? Visibility.Visible : Visibility.Collapsed;
+        footer.Text = prefs.Settings ? notice ?? "" : "";
+        footer.Visibility = prefs.Settings && notice is not null ? Visibility.Visible : Visibility.Collapsed;
         if (prefs.Settings) {
             content.Children.Add(new TextBlock { Text = "SERVICES", FontSize = 11, FontWeight = FontWeights.SemiBold, Margin = new(20, 12, 20, 12) });
             foreach (var service in Catalog.Services) {
@@ -136,17 +93,10 @@ public sealed class MainWindow : Window
                 toggle.Click += (_, _) => {
                     prefs.Toggle(service.Id);
                     if (!sample) try { LocalStore.SavePreferences(prefs); } catch (Exception e) when (e is IOException or UnauthorizedAccessException) {
-                        prefs.Toggle(service.Id); toggle.IsChecked = prefs.Enabled.Contains(service.Id); footer.Text = "Could not save settings. Try again.";
+                        prefs.Toggle(service.Id); toggle.IsChecked = prefs.Enabled.Contains(service.Id); notice = "Could not save settings. Try again."; Refresh();
                     }
                 };
                 DockPanel.SetDock(toggle, Dock.Right); row.Children.Add(toggle); row.Children.Add(Text(service.Name, size: 13)); content.Children.Add(row);
-                if (!sample) {
-                    var connect = new Button { Content = "Connect", Margin = new(6, 0, 6, 0), IsEnabled = !loginPending };
-                    connect.SetResourceReference(Button.BackgroundProperty, "Nav");
-                    connect.Click += async (_, _) => await ConnectSubscriptionAsync(service.Id);
-                    DockPanel.SetDock(connect, Dock.Right); row.Children.Insert(row.Children.Count - 1, connect);
-                    if (codeLogin is not null && SubscriptionLogin.RequiresCode(service.Id)) content.Children.Add(CodeEntry());
-                }
             }
             return;
         }
@@ -175,27 +125,6 @@ public sealed class MainWindow : Window
         }
         if (prefs.Enabled.Count == 0) { var empty = Text("No AI services to display.\nTurn on services in Settings.", true); empty.Margin = new(24, 40, 24, 40); content.Children.Add(empty); }
     }
-    FrameworkElement CodeEntry()
-    {
-        var row = new DockPanel { Margin = new(23, 0, 25, 10) };
-        // The box outlives each redraw, so detach it from the row built last time before reusing it.
-        if (codeBox.Parent is Panel previous) previous.Children.Remove(codeBox);
-        AutomationProperties.SetName(codeBox, "Claude authorization code");
-        codeBox.IsEnabled = !loginPending;
-        var cancel = new Button { Content = "Cancel", Margin = new(6, 0, 0, 0), IsEnabled = !loginPending };
-        var submit = new Button { Content = "Complete", IsEnabled = !loginPending };
-        foreach (var button in new[] { submit, cancel }) button.SetResourceReference(Button.BackgroundProperty, "Nav");
-        cancel.Click += (_, _) => CancelCodeLogin();
-        submit.Click += async (_, _) => await CompleteCodeLoginAsync();
-        codeBox.KeyDown -= CodeEntered; codeBox.KeyDown += CodeEntered;
-        DockPanel.SetDock(cancel, Dock.Right); DockPanel.SetDock(submit, Dock.Right);
-        row.Children.Add(cancel); row.Children.Add(submit); row.Children.Add(codeBox);
-        return row;
-    }
-    async void CodeEntered(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key == System.Windows.Input.Key.Enter) { e.Handled = true; await CompleteCodeLoginAsync(); }
-    }
     static readonly string[] TrackColors = ["#4BA3EF", "#70BB7B", "#E0A048"];
     FrameworkElement Progress(double? value, int index)
     {
@@ -213,7 +142,7 @@ public sealed class MainWindow : Window
         foreach (var dark in new[] { false, true }) foreach (var setting in new[] { false, true }) {
             prefs.Settings = setting; ApplyTheme(dark); Refresh();
             var element = (FrameworkElement)Content;
-            element.Width = 366; element.Height = setting ? (sample ? 350 : 520) : 626;
+            element.Width = 366; element.Height = setting ? 350 : 626;
             var surface = new Border { Background = (Brush)Resources["Background"] };
             Content = null; surface.Child = element; Content = surface;
             surface.Measure(new(366, element.Height)); surface.Arrange(new Rect(0, 0, 366, element.Height)); surface.UpdateLayout();

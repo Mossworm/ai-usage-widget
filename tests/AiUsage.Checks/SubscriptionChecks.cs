@@ -34,13 +34,9 @@ static class SubscriptionChecks
         check(unknown.SessionPercent is null && unknown.Status is not null, "Claude missing quota is not zero");
         var invalid = ClaudeClient.Parse(Json("""{"five_hour":{"utilization":101,"resets_at":"invalid"},"seven_day":null}"""), null, now);
         check(invalid.SessionPercent is null && invalid.SessionReset is null, "Claude invalid fields rejected");
-        check(SubscriptionLogin.FromArgument("aiusage:login-claude") == "claude", "Claude protocol URL routes to Claude login");
-        check(SubscriptionLogin.RequiresCode("claude") && !SubscriptionLogin.RequiresCode("chatgpt"), "Only Claude finishes login with a pasted code");
-        check(SubscriptionLogin.FromArgument("aiusage:login-gemini") is null, "Removed provider protocol URL is rejected");
-        check(SubscriptionLogin.FromArgument("aiusage:login-gemini?command=evil") is null, "Protocol does not accept arbitrary commands");
         using var card = JsonDocument.Parse(Card.Render(new() { Settings = true }, new(null, []), now));
         var cardText = card.RootElement.ToString();
-        check(cardText.Contains("aiusage:login") && cardText.Contains("aiusage:login-claude") && !cardText.Contains("login-gemini"), "Settings exposes only supported row connections");
+        check(!cardText.Contains("aiusage:") && !cardText.Contains("Connect"), "Settings carries no login entry point of its own");
 
         var dir = Path.Combine(Path.GetTempPath(), "SubscriptionChecks-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
@@ -51,12 +47,13 @@ static class SubscriptionChecks
                 count++;
                 check(request.RequestUri!.AbsoluteUri == "https://api.anthropic.com/api/oauth/usage", "Claude token sent only to Anthropic usage endpoint");
                 check(request.Headers.Authorization?.Parameter == "fake-claude-token" && request.Method == HttpMethod.Get, "Claude uses read-only authenticated GET");
+                check(request.Headers.UserAgent.ToString() == "claude-code/0.2.29", "The usage call identifies itself as the Claude Code CLI");
                 await Task.CompletedTask;
                 return Response("""{"five_hour":{"utilization":25},"seven_day":{"utilization":0}}""");
             });
             using var http = new HttpClient(transport);
             try { await new ClaudeClient(http, path).FetchAsync(); check(false, "Missing credentials must fail"); }
-            catch (UsageConnectionException) { check(count == 0, "Missing Claude credentials never trigger network"); }
+            catch (UsageConnectionException e) { check(count == 0 && e.Message.Contains("sign in with Claude Code"), "A missing credential file asks for a Claude Code sign-in without a request"); }
             var auth = """{"claudeAiOauth":{"accessToken":"fake-claude-token","subscriptionType":"pro","expiresAt":9999999999999}}""";
             await File.WriteAllTextAsync(path, auth);
             var result = await new ClaudeClient(http, path).FetchAsync();
@@ -64,7 +61,7 @@ static class SubscriptionChecks
             check(await File.ReadAllTextAsync(path) == auth, "Claude credential file never modified");
             await File.WriteAllTextAsync(path, """{"claudeAiOauth":{"accessToken":"fake","expiresAt":1}}""");
             try { await new ClaudeClient(http, path).FetchAsync(); check(false, "Expired credential must fail"); }
-            catch (UsageConnectionException) { check(count == 1, "Expired Claude credential does not make a request"); }
+            catch (UsageConnectionException e) { check(count == 1 && e.Message.Contains("open Claude Code"), "An expired credential points at Claude Code instead of a Connect button"); }
 
             using var rateLimited = new HttpClient(new FakeHandler(_ => {
                 var response = new HttpResponseMessage(HttpStatusCode.TooManyRequests); response.Headers.RetryAfter = new RetryConditionHeaderValue(TimeSpan.FromMinutes(20));
@@ -75,87 +72,11 @@ static class SubscriptionChecks
             catch (UsageConnectionException e) { check(e.RetryAfter == TimeSpan.FromMinutes(20), "Server Retry-After preserved"); }
             using var denied = new HttpClient(new FakeHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("secret-server-error") })));
             try { await new ClaudeClient(denied, path).FetchAsync(); check(false, "401 must fail"); }
-            catch (UsageConnectionException e) { check(!e.Message.Contains("secret-server-error") && e.Message.Contains("reconnect"), "Auth errors sanitized and actionable"); }
+            catch (UsageConnectionException e) { check(!e.Message.Contains("secret-server-error") && e.Message.Contains("sign in again"), "Auth errors sanitized and actionable"); }
 
-            await ClaudeOAuthChecksAsync(check, dir, now);
+            check(ClaudeClient.DefaultCredentialsPath().EndsWith(Path.Combine(".claude", ".credentials.json")), "The CLI credential file is the single Claude source");
 
         } finally { foreach (var file in Directory.GetFiles(dir)) File.Delete(file); Directory.Delete(dir); }
-    }
-    static async Task ClaudeOAuthChecksAsync(Action<bool, string> check, string dir, DateTimeOffset now)
-    {
-        var start = ClaudeOAuth.Start();
-        var url = new Uri(start.Url);
-        var query = Query(url);
-        check(url.GetLeftPart(UriPartial.Path) == "https://claude.ai/oauth/authorize" && query["response_type"] == "code", "Claude login opens the Anthropic authorize page");
-        check(query["code_challenge_method"] == "S256" && query["code_challenge"].Length > 0 && query["state"].Length > 0, "Claude login uses PKCE S256 with a state value");
-        check(!start.Url.Contains("client_secret") && query["code_challenge"] != query["state"] && query["code_challenge"] != start.Url, "Authorize request carries no secret and a challenge distinct from state");
-        check(query["redirect_uri"] == ClaudeOAuth.RedirectUri && query["client_id"] == ClaudeOAuth.ClientId, "Authorize request declares the redirect and client it will exchange with");
-        check(Query(new Uri(ClaudeOAuth.Start().Url))["code_challenge"] != query["code_challenge"], "Each Claude login generates fresh PKCE material");
-
-        check(ClaudeOAuth.ParseResponse("abc#xyz") == ("abc", "xyz"), "Pasted CODE#STATE splits into code and state");
-        check(ClaudeOAuth.ParseResponse("  abc  ") == ("abc", null), "A bare pasted code is accepted");
-        check(ClaudeOAuth.ParseResponse("https://platform.claude.com/oauth/code/callback?code=a%2Bb&state=s") == ("a+b", "s"), "A pasted callback link is decoded");
-        foreach (var bad in new[] { "", "   ", "#state" })
-            try { ClaudeOAuth.ParseResponse(bad); check(false, "Empty pasted code must fail"); } catch (UsageConnectionException) { }
-        try { await ClaudeOAuth.CompleteAsync(start, "code#wrong-state"); check(false, "State mismatch must fail"); }
-        catch (UsageConnectionException e) { check(e.Message.Contains("does not match"), "A mismatched login response is rejected before any network call"); }
-
-        var storePath = Path.Combine(dir, "claude-auth.dat");
-        var store = new ClaudeTokenStore(storePath);
-        check(store.Read() is null, "A missing Claude token store reads as not connected");
-        // Refresh decisions run off the real clock, so a token meant to be live needs a real expiry.
-        var live = DateTimeOffset.UtcNow.AddHours(1);
-        store.Save(new("stored-access", "stored-refresh", live, "max"));
-        check(!File.ReadAllText(storePath).Contains("stored-access"), "Stored Claude tokens are encrypted at rest");
-        var read = store.Read();
-        check(read?.AccessToken == "stored-access" && read.RefreshToken == "stored-refresh" && read.Plan == "max", "Stored Claude tokens round-trip");
-        check(read is not null && !read.IsExpired(live.AddHours(-1)) && read.IsExpired(live.AddHours(1)), "Token expiry is evaluated against the stored time");
-
-        var requests = new List<string>();
-        using var storeHttp = new HttpClient(new FakeHandler(async request => {
-            requests.Add(request.RequestUri!.AbsoluteUri);
-            await Task.CompletedTask;
-            return Response("""{"five_hour":{"utilization":12},"seven_day":{"utilization":30}}""");
-        }));
-        var usage = await new ClaudeClient(storeHttp, null, store).FetchAsync();
-        check(usage.SessionPercent == 12 && usage.Plan == "max", "The app's own Claude login serves usage without the CLI");
-        check(requests is ["https://api.anthropic.com/api/oauth/usage"], "A valid stored token goes straight to the usage endpoint");
-        check(ClaudeClient.DefaultCredentialsPath().EndsWith(Path.Combine(".claude", ".credentials.json")), "The CLI credential file stays the documented fallback source");
-
-        store.Save(new("old-access", null, DateTimeOffset.UtcNow.AddYears(-1), "max"));
-        try { await new ClaudeClient(storeHttp, null, store).FetchAsync(); check(false, "Expired token without refresh must fail"); }
-        catch (UsageConnectionException e) { check(e.Message.Contains("reconnect") && requests.Count == 1, "An expired token with no refresh token asks for reconnect without a usage call"); }
-
-        var refreshed = new List<string>();
-        using var refreshHttp = new HttpClient(new FakeHandler(async request => {
-            var target = request.RequestUri!.AbsoluteUri;
-            refreshed.Add(target);
-            await Task.CompletedTask;
-            if (target.Contains("/oauth/token")) {
-                check(request.Method == HttpMethod.Post && (await request.Content!.ReadAsStringAsync()).Contains("\"grant_type\":\"refresh_token\""), "Refresh uses a POST with the refresh grant");
-                return Response("""{"access_token":"new-access","refresh_token":"new-refresh","expires_in":3600}""");
-            }
-            check(request.Headers.Authorization?.Parameter == "new-access", "The refreshed token is used for the usage call");
-            return Response("""{"five_hour":{"utilization":5},"seven_day":{"utilization":6}}""");
-        }));
-        store.Save(new("stale-access", "stale-refresh", DateTimeOffset.UtcNow.AddYears(-1), "pro"));
-        var afterRefresh = await new ClaudeClient(refreshHttp, null, store).FetchAsync();
-        check(afterRefresh.SessionPercent == 5 && afterRefresh.Plan == "pro", "An expired login refreshes itself and keeps serving usage");
-        var rotated = store.Read();
-        check(rotated?.AccessToken == "new-access" && rotated.RefreshToken == "new-refresh" && rotated.Plan == "pro", "Rotated tokens are saved and the plan is preserved");
-        check(refreshed[0].EndsWith("/v1/oauth/token"), "Refresh hits the token endpoint before the usage endpoint");
-        check(!System.Text.Json.JsonSerializer.Serialize(afterRefresh).Contains("new-access"), "Display data excludes the refreshed token");
-        store.Clear();
-        check(store.Read() is null && !File.Exists(storePath), "Disconnecting removes the stored Claude login");
-    }
-    static Dictionary<string, string> Query(Uri url)
-    {
-        var result = new Dictionary<string, string>();
-        foreach (var pair in url.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)) {
-            var separator = pair.IndexOf('=');
-            if (separator > 0) result[pair[..separator]] = Uri.UnescapeDataString(pair[(separator + 1)..]);
-        }
-        return result;
     }
     static HttpResponseMessage Response(string json) => new(HttpStatusCode.OK) { Content = new StringContent(json) };
     sealed class FakeHandler(Func<HttpRequestMessage, Task<HttpResponseMessage>> handler) : HttpMessageHandler

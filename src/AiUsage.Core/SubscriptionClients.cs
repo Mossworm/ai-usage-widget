@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Security.Cryptography;
 using System.Text.Json;
 using static AiUsage.CodexClient;
 
@@ -26,15 +25,15 @@ internal static class UsageHttp
             throw new UsageConnectionException($"{service} rate limited · retrying later", TimeSpan.FromSeconds(Math.Clamp(delay.TotalSeconds, 300, 86400)));
         }
         if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden)
-            throw new UsageConnectionException($"Check {service} authentication and account access · reconnect in Settings");
+            throw new UsageConnectionException($"{service} rejected this sign-in · sign in again in the CLI");
         if (!response.IsSuccessStatusCode) throw new UsageConnectionException($"{service} request failed (HTTP {(int)response.StatusCode})");
         using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(token));
         if (json.RootElement.ValueKind != JsonValueKind.Object) throw new UsageConnectionException($"Check the {service} response format");
         return json.RootElement.Clone();
     }
-    public static async Task<JsonElement> CredentialsAsync(string path, string service, CancellationToken token)
+    public static async Task<JsonElement> CredentialsAsync(string path, string service, string missing, CancellationToken token)
     {
-        if (!File.Exists(path)) throw new UsageConnectionException($"{service} login required · connect in Settings");
+        if (!File.Exists(path)) throw new UsageConnectionException(missing);
         if (new FileInfo(path).Length > 262144) throw new UsageConnectionException($"Check the {service} credential file format");
         using var json = JsonDocument.Parse(await File.ReadAllTextAsync(path, token));
         return json.RootElement.Clone();
@@ -43,13 +42,19 @@ internal static class UsageHttp
     public static double? Percentage(JsonElement value, string property) => Get(value, property).TryNumber(out var n) && n >= 0 && n <= 100 ? n : null;
 }
 
-public sealed class ClaudeClient(HttpClient? http = null, string? credentialsPath = null, ClaudeTokenStore? store = null)
+public sealed class ClaudeClient(HttpClient? http = null, string? credentialsPath = null)
 {
     public static string DefaultCredentialsPath()
     {
         var folder = Environment.GetEnvironmentVariable("CLAUDE_CONFIG_DIR") ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude");
         return Path.Combine(folder, ".credentials.json");
     }
+    // The Claude Code CLI owns the browser sign-in, the credential file and the token refresh.
+    // This widget only ever reads that file; it never writes it and stores no token of its own.
+    const string SignInRequired = "Claude Code sign-in required · sign in with Claude Code";
+    const string SignInExpired = "Claude Code sign-in expired · open Claude Code to refresh it";
+    // The usage endpoint is the CLI's own, so it is addressed with the CLI's user agent.
+    static string Agent => Environment.GetEnvironmentVariable("AIUSAGE_CLAUDE_USER_AGENT") is { Length: > 0 } custom ? custom.Trim() : "claude-code/0.2.29";
     public async Task<UsageEntry> FetchAsync(CancellationToken cancellation = default)
     {
         var (result, plan) = await FetchResponseAsync(cancellation);
@@ -62,33 +67,20 @@ public sealed class ClaudeClient(HttpClient? http = null, string? credentialsPat
         using var request = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/api/oauth/usage");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", access);
         request.Headers.Add("anthropic-beta", "oauth-2025-04-20");
-        request.Headers.UserAgent.ParseAdd("AiUsageWidget/1.2.0");
+        request.Headers.UserAgent.ParseAdd(Agent);
         return (await UsageHttp.SendAsync(http ?? UsageHttp.Client, request, "Claude", cancellation), plan);
     }
-    // An explicit credential path pins the source. Otherwise the widget's own browser login wins,
-    // and an existing Claude Code CLI credential file stays usable as the fallback.
     async Task<(string Access, string? Plan)> ResolveAsync(CancellationToken cancellation)
     {
-        if (credentialsPath is null && (store ?? new ClaudeTokenStore()).Read() is { } saved)
-            return (await FreshAsync(saved, cancellation), saved.Plan);
-        var root = await UsageHttp.CredentialsAsync(credentialsPath ?? DefaultCredentialsPath(), "Claude", cancellation);
+        var root = await UsageHttp.CredentialsAsync(credentialsPath ?? DefaultCredentialsPath(), "Claude", SignInRequired, cancellation);
         var oauth = Get(root, "claudeAiOauth");
         var access = String(oauth, "accessToken");
-        if (string.IsNullOrWhiteSpace(access)) throw new UsageConnectionException("Claude subscription login required · connect in Settings");
+        if (string.IsNullOrWhiteSpace(access)) throw new UsageConnectionException(SignInRequired);
+        // The refresh token beside it is deliberately left alone: refreshing would rotate the value
+        // the running CLI still holds and sign the user out of Claude Code.
         if (Get(oauth, "expiresAt").TryNumber(out var expires) && expires <= DateTimeOffset.UtcNow.ToUnixTimeMilliseconds())
-            throw new UsageConnectionException("Claude login expired · reconnect in Settings");
+            throw new UsageConnectionException(SignInExpired);
         return (access, String(oauth, "subscriptionType"));
-    }
-    async Task<string> FreshAsync(ClaudeTokens saved, CancellationToken cancellation)
-    {
-        if (!saved.IsExpired(DateTimeOffset.UtcNow)) return saved.AccessToken;
-        if (string.IsNullOrWhiteSpace(saved.RefreshToken)) throw new UsageConnectionException("Claude login expired · reconnect in Settings");
-        var refreshed = await ClaudeOAuth.RefreshAsync(saved.RefreshToken, http, cancellation);
-        var value = refreshed with { RefreshToken = refreshed.RefreshToken ?? saved.RefreshToken, Plan = refreshed.Plan ?? saved.Plan };
-        // A rotated token that cannot be stored still works for this fetch; the next one signs in again.
-        try { (store ?? new ClaudeTokenStore()).Save(value); }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or CryptographicException) { }
-        return value.AccessToken;
     }
     public static UsageEntry Parse(JsonElement result, string? plan, DateTimeOffset now)
     {

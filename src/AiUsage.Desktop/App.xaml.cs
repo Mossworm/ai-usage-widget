@@ -15,10 +15,6 @@ public partial class App : Application
             Directory.CreateDirectory(directory);
             window.RenderPreviews(directory);
             Shutdown();
-        } else {
-            var login = e.Args.Select(SubscriptionLogin.FromArgument).FirstOrDefault(id => id is not null);
-            if (login is not null) window.Loaded += async (_, _) => await window.ConnectSubscriptionAsync(login);
-            window.Show();
-        }
+        } else window.Show();
     }
 }

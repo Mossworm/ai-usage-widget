@@ -22,10 +22,11 @@ Pin it with Win + W, or open the desktop window if you prefer a standalone view.
 Show or hide each service independently; hidden services stop being queried.
 
 **Connecting**
-- Claude Code needs no CLI install. The app opens the official Claude sign-in page in your browser, you paste back the code it shows, and you are connected. Tokens are refreshed automatically afterward.
-- Codex connects automatically if the Codex CLI is installed and already signed in. Otherwise use the connect button in Settings, which opens the official sign-in page in your browser.
+There is nothing to connect. The app uses the sign-in the tools on your PC already have.
+- Claude Code - reads the credential file the Claude Code CLI keeps at `%USERPROFILE%\.claude\.credentials.json`, and never writes to it. If the widget reports the sign-in as expired, open Claude Code once and the CLI refreshes it.
+- Codex - asks the Codex CLI itself over its local app-server interface. The app finds `codex.exe` from a global install, the standalone installer, or the ChatGPT extension for VS Code, and uses the most recently updated one. If you have never signed in, run `codex login` once.
 
-You always type your password on the provider's own web page, never in this app.
+This app never asks for a password and has no sign-in screen of its own.
 
 **Built for the widget board**
 - Small, medium, and large widget sizes
@@ -35,10 +36,10 @@ You always type your password on the provider's own web page, never in this app.
 - Sample mode shows the layout with placeholder numbers and makes no network calls
 
 **Privacy**
-Nothing is sent to the developer. There is no analytics, no advertising, no tracking, and no server operated by this app. Requests go directly to the provider you connected. Claude tokens are stored on your PC encrypted with Windows DPAPI, and existing CLI credential files are read but never modified.
+Nothing is sent to the developer. There is no analytics, no advertising, no tracking, and no server operated by this app. Requests go directly to each provider. The app stores no credential of its own: existing CLI credential files are read but never modified.
 
 **Requirements**
-Windows 11 22H2 or later, x64, and the Windows widget board. The app interface is English only.
+Windows 11 22H2 or later, x64, and the Windows widget board. Each service you want to see needs its CLI installed and signed in: Claude Code for Claude, the Codex CLI for Codex. The app interface is English only.
 
 **Note**
 AI Usage Widget is an independent tool from Mossworm. It is not affiliated with, endorsed by, or sponsored by OpenAI or Anthropic. All product names are trademarks of their respective owners. Usage numbers are what each provider reports and may lag or change without notice.
@@ -47,7 +48,7 @@ AI Usage Widget is an independent tool from Mossworm. It is not affiliated with,
 - Codex and Claude Code quotas on one widget
 - 5-hour and weekly windows with reset times in your local time
 - An extra per-model weekly line for Claude Code
-- Sign in to Claude Code without installing any CLI
+- No sign-in step: it reuses the Claude Code and Codex CLI logins already on your PC
 - Small, medium, and large widget sizes, plus a standalone desktop window
 - Automatic Windows light and dark theme
 - No analytics, no tracking, no data sent to the developer
@@ -86,10 +87,11 @@ Win + W로 위젯을 고정하거나, 별도 창을 선호하면 데스크톱 �
 서비스별로 표시를 켜고 끌 수 있으며, 끈 서비스는 조회도 하지 않습니다.
 
 **연결 방법**
-- Claude Code는 CLI 설치가 필요 없습니다. 앱이 공식 Claude 로그인 페이지를 브라우저로 열고, 표시된 코드를 붙여넣으면 연결이 끝납니다. 이후 토큰은 자동으로 갱신됩니다.
-- Codex는 Codex CLI가 설치되어 있고 로그인되어 있으면 자동으로 연결됩니다. 아니면 Setting의 연결 버튼으로 공식 로그인 페이지를 열어 로그인하세요.
+따로 연결할 것이 없습니다. PC에 이미 설치된 도구의 로그인을 그대로 씁니다.
+- Claude Code - Claude Code CLI가 관리하는 `%USERPROFILE%\.claude\.credentials.json`을 읽기만 하며, 수정하지 않습니다. 로그인이 만료되었다고 표시되면 Claude Code를 한 번 실행하면 CLI가 갱신합니다.
+- Codex - Codex CLI의 로컬 app-server 인터페이스로 직접 물어봅니다. 전역 설치본, 단독 설치본, VS Code용 ChatGPT 확장에서 `codex.exe`를 찾아 가장 최근에 갱신된 것을 사용합니다. 로그인한 적이 없다면 `codex login`을 한 번 실행하세요.
 
-비밀번호는 항상 각 제공자의 웹 페이지에서 직접 입력하며, 이 앱에는 입력하지 않습니다.
+이 앱은 비밀번호를 요구하지 않으며 자체 로그인 화면도 없습니다.
 
 **위젯 보드에 맞춘 설계**
 - 작음·보통·큼 위젯 크기 지원
@@ -99,10 +101,10 @@ Win + W로 위젯을 고정하거나, 별도 창을 선호하면 데스크톱 �
 - 샘플 모드는 네트워크 조회 없이 예시 수치로 레이아웃만 보여줌
 
 **개인정보**
-개발자에게 전송되는 데이터가 없습니다. 분석 도구, 광고, 추적, 자체 서버가 없으며 요청은 이용자가 연결한 제공자에게 직접 전달됩니다. Claude 토큰은 Windows DPAPI로 암호화해 이 PC에만 저장하고, 기존 CLI 자격 증명 파일은 읽기만 하고 수정하지 않습니다.
+개발자에게 전송되는 데이터가 없습니다. 분석 도구, 광고, 추적, 자체 서버가 없으며 요청은 각 제공자에게 직접 전달됩니다. 앱이 자체적으로 저장하는 자격 증명은 없으며, 기존 CLI 자격 증명 파일은 읽기만 하고 수정하지 않습니다.
 
 **요구 사항**
-Windows 11 22H2 이상, x64, Windows 위젯 보드. 앱 화면은 영어만 지원합니다.
+Windows 11 22H2 이상, x64, Windows 위젯 보드. 보려는 서비스마다 해당 CLI가 설치·로그인되어 있어야 합니다(Claude는 Claude Code, Codex는 Codex CLI). 앱 화면은 영어만 지원합니다.
 
 **안내**
 AI Usage Widget은 Mossworm이 만든 독립 도구이며 OpenAI, Anthropic과 제휴하거나 후원받지 않았습니다. 모든 제품명은 각 소유자의 상표입니다. 표시되는 수치는 각 제공자가 보고한 값이며 지연되거나 예고 없이 바뀔 수 있습니다.
@@ -111,7 +113,7 @@ AI Usage Widget은 Mossworm이 만든 독립 도구이며 OpenAI, Anthropic과 �
 - Codex, Claude Code 한도를 위젯 하나에서 확인
 - 5시간·주간 창과 현지 시간 리셋 시각 표시
 - Claude Code는 모델별 주간 한도 한 줄 추가
-- CLI 설치 없이 Claude Code 로그인
+- 별도 로그인 단계 없음: PC의 Claude Code·Codex CLI 로그인을 그대로 사용
 - 작음·보통·큼 위젯 크기와 별도 데스크톱 창
 - Windows 라이트·다크 테마 자동 전환
 - 분석·추적 없음, 개발자에게 전송되는 데이터 없음

@@ -8,26 +8,57 @@ public sealed class CodexException(string message) : Exception(message);
 
 public static class CodexExecutable
 {
+    const string Exe = "codex.exe";
+    // An explicit pin wins outright. Otherwise every known install location contributes a candidate
+    // and the most recently written binary is chosen, so a freshly updated IDE extension beats a
+    // stale global install instead of losing to whichever folder happened to be searched first.
     public static string Find()
     {
-        var configured = Environment.GetEnvironmentVariable("CODEX_BIN");
-        if (!string.IsNullOrWhiteSpace(configured)) {
+        foreach (var name in new[] { "CODEX_EXECUTABLE", "CODEX_BIN" }) {
+            var configured = Environment.GetEnvironmentVariable(name);
+            if (string.IsNullOrWhiteSpace(configured)) continue;
             if (Path.IsPathFullyQualified(configured) && configured.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && File.Exists(configured)) return configured;
-            throw new CodexException("Set CODEX_BIN to the full path of codex.exe.");
+            throw new CodexException($"Set {name} to the full path of {Exe}.");
         }
+        var found = Candidates().Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(Written).FirstOrDefault();
+        return found ?? throw new CodexException("Codex CLI was not found. Install it and try again.");
+    }
+    static DateTime Written(string path)
+    {
+        try { return File.GetLastWriteTimeUtc(path); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { return DateTime.MinValue; }
+    }
+    static IEnumerable<string> Candidates()
+    {
+        // On PATH, or beside a global npm install.
         var folders = (Environment.GetEnvironmentVariable("PATH") ?? "").Split(Path.PathSeparator)
             .Concat([Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm"), Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "nodejs")]);
         foreach (var folder in folders.Where(Path.IsPathFullyQualified)) {
-            var direct = Path.Combine(folder, "codex.exe");
-            if (File.Exists(direct)) return direct;
+            yield return Path.Combine(folder, Exe);
             // Resolve the native npm binary instead of passing a shell command through cmd.exe.
             var package = Path.Combine(folder, "node_modules", "@openai", "codex");
-            foreach (var path in new[] {
-                Path.Combine(package, "node_modules", "@openai", "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", "codex.exe"),
-                Path.Combine(package, "vendor", "x86_64-pc-windows-msvc", "codex", "codex.exe")
-            }) if (File.Exists(path)) return path;
+            yield return Path.Combine(package, "node_modules", "@openai", "codex-win32-x64", "vendor", "x86_64-pc-windows-msvc", "bin", Exe);
+            yield return Path.Combine(package, "vendor", "x86_64-pc-windows-msvc", "codex", Exe);
         }
-        throw new CodexException("Codex CLI was not found. Install it and try again.");
+        // The standalone installer keeps one folder per version.
+        foreach (var version in Children(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "OpenAI", "Codex", "bin")))
+            yield return Path.Combine(version, Exe);
+        // The binary shipped inside the ChatGPT extension for VS Code and the editors forked from it.
+        foreach (var root in ExtensionRoots())
+            foreach (var extension in Children(root).Where(x => Path.GetFileName(x).StartsWith("openai.chatgpt-", StringComparison.OrdinalIgnoreCase)))
+                foreach (var relative in new[] { Path.Combine("bin", "windows-x86_64", Exe), Path.Combine("binaries", "windows-x86_64", Exe), Path.Combine("bin", Exe) })
+                    yield return Path.Combine(extension, relative);
+    }
+    static IEnumerable<string> ExtensionRoots()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return [.. new[] { ".vscode", ".vscode-insiders", ".windsurf", ".cursor" }.Select(ide => Path.Combine(home, ide, "extensions"))];
+    }
+    static IEnumerable<string> Children(string folder)
+    {
+        try { return Directory.EnumerateDirectories(folder); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException) { return []; }
     }
     internal static Process Start(params string[] arguments)
     {
@@ -64,26 +95,12 @@ public sealed class CodexClient
             var identity = Get(account, "account");
             var type = String(identity, "type");
             if (identity.ValueKind == JsonValueKind.Null || identity.ValueKind == JsonValueKind.Undefined)
-                throw new CodexException("Codex login is required. Connect it in Settings.");
+                throw new CodexException("Codex sign-in required. Run `codex login` once.");
             if (type == "apiKey") throw new CodexException("You are signed in with an API key. Sign in to Codex with your ChatGPT account.");
             var limits = await RpcAsync(process, 3, "account/rateLimits/read", new { }, timeout.Token);
             return Parse(limits, String(identity, "planType"), DateTimeOffset.Now);
         }
         finally { timeout.Cancel(); CodexExecutable.Stop(process); await drain; }
-    }
-    // Codex CLI owns browser OAuth, secure credential storage and token refresh.
-    // The widget never reads auth.json or receives password/access/refresh tokens.
-    public static async Task LoginAsync(CancellationToken cancellation)
-    {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellation);
-        timeout.CancelAfter(TimeSpan.FromMinutes(5));
-        using var process = CodexExecutable.Start("login");
-        var stdout = DrainAsync(process.StandardOutput, timeout.Token);
-        var stderr = DrainAsync(process.StandardError, timeout.Token);
-        try {
-            await process.WaitForExitAsync(timeout.Token);
-            if (process.ExitCode != 0) throw new CodexException("Login did not complete. Try connecting again.");
-        } finally { timeout.Cancel(); CodexExecutable.Stop(process); await Task.WhenAll(stdout, stderr); }
     }
     static async Task DrainAsync(StreamReader reader, CancellationToken token)
     {
@@ -107,7 +124,7 @@ public sealed class CodexClient
             if (root.TryGetProperty("error", out var error)) {
                 var message = String(error, "message") ?? "";
                 if (new[] { "auth", "login", "401", "unauthorized" }.Any(s => message.Contains(s, StringComparison.OrdinalIgnoreCase)))
-                    throw new CodexException("Codex authentication expired. Reconnect in Settings.");
+                    throw new CodexException("Codex sign-in expired. Run `codex login` again.");
                 throw new CodexException("Could not retrieve Codex usage. It will retry shortly.");
             }
             var result = Get(root, "result");
