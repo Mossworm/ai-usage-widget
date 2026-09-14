@@ -15,15 +15,11 @@ public static class Catalog
 {
     public static readonly Service[] Services = [
         new("chatgpt", "Codex", false, "#10A586"),
-        new("claude", "Claude Code", false, "#D87959"),
-        new("opencode", "OpenCode", false, "#737983"),
-        new("commandcode", "Command Code", false, "#8B5CF6")
+        new("claude", "Claude Code", false, "#D87959")
     ];
     public static UsageSnapshot Sample(DateTimeOffset now) => new(now, [
         new("chatgpt", "Plus", 23, now.AddHours(3).AddMinutes(12), 38, now.AddDays(4)),
-        new("claude", "Max", 7, now.AddHours(2).AddMinutes(42), 14, now.AddDays(3)),
-        new("opencode", "Go", 11, now.AddHours(5), 24, now.AddDays(6)),
-        new("commandcode", "Go", 12, now.AddHours(4), 31, now.AddDays(3), Windows: [new("Monthly credits", 18, now.AddDays(3))])
+        new("claude", "Max", 7, now.AddHours(2).AddMinutes(42), 14, now.AddDays(3))
     ], true);
 }
 

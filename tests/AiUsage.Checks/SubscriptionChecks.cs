@@ -36,32 +36,8 @@ static class SubscriptionChecks
         check(invalid.SessionPercent is null && invalid.SessionReset is null, "Claude invalid fields rejected");
         check(SubscriptionLogin.FromArgument("aiusage:login-claude") == "claude", "Claude protocol URL routes to Claude login");
         check(SubscriptionLogin.RequiresCode("claude") && !SubscriptionLogin.RequiresCode("chatgpt"), "Only Claude finishes login with a pasted code");
-        check(SubscriptionLogin.FromArgument("aiusage:login-opencode") == "opencode" && SubscriptionLogin.FromArgument("aiusage:login-commandcode") == "commandcode", "New providers route to browser login actions");
         check(SubscriptionLogin.FromArgument("aiusage:login-gemini") is null, "Removed provider protocol URL is rejected");
         check(SubscriptionLogin.FromArgument("aiusage:login-gemini?command=evil") is null, "Protocol does not accept arbitrary commands");
-        var opencode = OpenCodeClient.Parse(Json("""{"usage":{"rolling":{"usagePercent":25,"resetInSec":600},"weekly":{"usagePercent":40,"resetInSec":3600}}}"""), now);
-        check(opencode.Id == "opencode" && opencode.Plan == "Go" && opencode.SessionPercent == 25 && opencode.WeeklyPercent == 40 && opencode.SessionReset == now.AddMinutes(10), "OpenCode usage API maps rolling and weekly windows");
-        var opencodeNew = OpenCodeClient.Parse(Json("""{"usage":{"rolling":{"percent":10,"resetsAt":"2026-09-12T14:00:00Z"},"monthly":{"percent":27,"resetsAt":"2026-09-18T12:00:00Z"}}}"""), now);
-        check(opencodeNew.Plan == "Go" && opencodeNew.SessionPercent == 10 && opencodeNew.WeeklyPercent == 27 && opencodeNew.SessionReset?.Offset == TimeSpan.Zero, "OpenCode percent/resetsAt shape falls back to monthly for weekly");
-        try { OpenCodeClient.Parse(Json("""{"usage":{"rolling":null,"weekly":null}}"""), now); check(false, "Empty OpenCode usage must fail"); }
-        catch (UsageConnectionException e) { check(e.Message.Contains("response format"), "Empty OpenCode usage is explicit, not zero"); }
-        var commandCode = CommandCodeClient.Parse(
-            Json("""{"org":{"id":"org_123"}}"""),
-            Json("""{"credits":{"monthlyCredits":8.0,"purchasedCredits":2.0,"freeCredits":0},"windowLimits":{"fiveHour":{"used":4.0,"cap":16.0,"resetAt":"2026-09-12T16:00:00Z"},"weekly":{"used":14.0,"cap":40.0,"resetAt":"2026-09-18T12:00:00Z"}}}"""),
-            Json("""{"totalCost":2.0}"""),
-            Json("""{"success":true,"data":{"planId":"individual-go","currentPeriodEnd":"2026-10-01T00:00:00Z"}}"""), now);
-        check(commandCode.Id == "commandcode" && commandCode.Plan == "Go" && commandCode.SessionPercent == 25 && commandCode.WeeklyPercent == 35, "Command Code billing payload maps plan and 5-hour/weekly windows");
-        check(CommandCodeClient.NormalizePlan("goat-monthly") == "Goat" && CommandCodeClient.NormalizePlan("pro-monthly") == "Pro" && CommandCodeClient.NormalizePlan("individual-go") == "Go", "Command Code plans normalized to Go, Goat, Pro");
-        var commandMonthly = CommandCodeClient.Parse(
-            Json("""{"org":{"id":"org_123"}}"""),
-            Json("""{"credits":{"monthlyCredits":8.0,"purchasedCredits":2.0,"freeCredits":0},"windowLimits":{"fiveHour":{"used":1.6,"cap":16.0,"resetAt":"2026-09-12T16:00:00Z"}}}"""),
-            Json("""{"totalCost":2.0}"""),
-            Json("""{"success":true,"data":{"planId":"pro"}}"""), now);
-        check(commandMonthly.SessionPercent == 10 && commandMonthly.WeeklyPercent is not null && Math.Abs(commandMonthly.WeeklyPercent.Value - 100.0 * 2 / 12) < 0.001 && commandMonthly.Plan == "Pro", "Command Code weekly falls back to monthly billing period");
-        try {
-            CommandCodeClient.Parse(Json("""{"org":{"id":"org_123"}}"""), Json("""{"credits":{}}"""), Json("""{}"""), Json("""{}"""), now);
-            check(false, "Empty Command Code usage must fail");
-        } catch (UsageConnectionException e) { check(e.Message.Contains("response format"), "Empty Command Code usage is explicit, not zero"); }
         using var card = JsonDocument.Parse(Card.Render(new() { Settings = true }, new(null, []), now));
         var cardText = card.RootElement.ToString();
         check(cardText.Contains("aiusage:login") && cardText.Contains("aiusage:login-claude") && !cardText.Contains("login-gemini"), "Settings exposes only supported row connections");
@@ -101,40 +77,7 @@ static class SubscriptionChecks
             try { await new ClaudeClient(denied, path).FetchAsync(); check(false, "401 must fail"); }
             catch (UsageConnectionException e) { check(!e.Message.Contains("secret-server-error") && e.Message.Contains("reconnect"), "Auth errors sanitized and actionable"); }
 
-            var openCodeAuth = Path.Combine(dir, "opencode-auth.json");
-            try { await new OpenCodeClient(http, Path.Combine(dir, "missing-opencode.json")).FetchAsync(); check(false, "Missing OpenCode credentials must fail"); }
-            catch (UsageConnectionException e) { check(e.Message == "OpenCode login required · connect in Settings", "Missing OpenCode credentials ask for login without network"); }
-            await File.WriteAllTextAsync(openCodeAuth, """{"opencode-go":{"type":"api","key":"fake-opencode-key"}}""");
-            using var openCodeTransport = new FakeHandler(async request => {
-                check(request.RequestUri!.AbsoluteUri == "https://opencode.ai/zen/go/v1/usage", "OpenCode token sent only to Go usage endpoint");
-                check(request.Headers.Authorization?.Scheme == "Bearer" && request.Headers.Authorization?.Parameter == "fake-opencode-key", "OpenCode uses read-only Bearer GET");
-                await Task.CompletedTask;
-                return Response("""{"usage":{"rolling":{"percent":10,"resetsAt":"2026-09-12T14:00:00Z"},"weekly":{"percent":27,"resetsAt":"2026-09-18T12:00:00Z"}}}""");
-            });
-            using var openCodeHttp = new HttpClient(openCodeTransport);
-            var openCodeLive = await new OpenCodeClient(openCodeHttp, openCodeAuth).FetchAsync();
-            check(openCodeLive.Plan == "Go" && openCodeLive.SessionPercent == 10 && openCodeLive.WeeklyPercent == 27 && !JsonSerializer.Serialize(openCodeLive).Contains("fake-opencode-key"), "OpenCode auth.json key used and excluded from display");
-            check((await File.ReadAllTextAsync(openCodeAuth)).Contains("fake-opencode-key"), "OpenCode credential file never modified");
-
             await ClaudeOAuthChecksAsync(check, dir, now);
-
-            var commandAuth = Path.Combine(dir, "commandcode-auth.json");
-            try { await new CommandCodeClient(http, Path.Combine(dir, "missing-commandcode.json")).FetchAsync(); check(false, "Missing Command Code credentials must fail"); }
-            catch (UsageConnectionException e) { check(e.Message == "Command Code login required · connect in Settings", "Missing Command Code credentials ask for login without network"); }
-            await File.WriteAllTextAsync(commandAuth, """{"apiKey":"fake-cc-key"}""");
-            using var commandTransport = new FakeHandler(async request => {
-                check(request.Headers.Authorization?.Scheme == "Bearer" && request.Headers.Authorization?.Parameter == "fake-cc-key", "Command Code uses read-only Bearer GET");
-                await Task.CompletedTask;
-                var url = request.RequestUri!.AbsoluteUri;
-                if (url.Contains("/alpha/whoami")) return Response("""{"org":{"id":"org_123"}}""");
-                if (url.Contains("/alpha/billing/credits")) return Response("""{"credits":{"monthlyCredits":8.0,"purchasedCredits":2.0},"windowLimits":{"fiveHour":{"used":4.0,"cap":16.0,"resetAt":"2026-09-12T16:00:00Z"},"weekly":{"used":14.0,"cap":40.0,"resetAt":"2026-09-18T12:00:00Z"}}}""");
-                if (url.Contains("/alpha/usage/summary")) return Response("""{"totalCost":2.0}""");
-                return Response("""{"success":true,"data":{"planId":"goat-monthly"}}""");
-            });
-            using var commandHttp = new HttpClient(commandTransport);
-            var commandLive = await new CommandCodeClient(commandHttp, commandAuth).FetchAsync();
-            check(commandLive.Plan == "Goat" && commandLive.SessionPercent == 25 && commandLive.WeeklyPercent == 35 && !JsonSerializer.Serialize(commandLive).Contains("fake-cc-key"), "Command Code auth.json key used and excluded from display");
-            check((await File.ReadAllTextAsync(commandAuth)).Contains("fake-cc-key"), "Command Code credential file never modified");
 
         } finally { foreach (var file in Directory.GetFiles(dir)) File.Delete(file); Directory.Delete(dir); }
     }

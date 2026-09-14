@@ -2,14 +2,14 @@
 
 Windows 11 위젯 패널용 C# 위젯과 별도 데스크톱 미리보기입니다. 참고 이미지의 서비스 순서와 Status / Setting 두 화면을 구현했습니다. Logs와 순서 변경 기능은 없습니다. Codex·Claude Code 로그인은 Setting에서 브라우저로 연결합니다. Claude Code는 CLI 설치 없이 앱이 직접 OAuth 인증을 수행합니다.
 
-- Codex, Claude Code, OpenCode, Command Code 표시 토글
+- Codex, Claude Code 표시 토글
 - 각 제공자: 이름·플랜, 제공자가 보고한 사용률·리셋 시간, 진행 막대
 - Windows 라이트·다크 테마 자동 적용
 - 표시 언어는 Windows UI 언어와 관계없이 영어만 지원
 - 위젯 설정은 Windows 위젯 호스트의 CustomState에 저장. 데스크톱 미리보기 설정은 별도로 저장
 - 위젯은 보이는 동안 30초마다 화면을 갱신하고, 미리보기는 15초마다 갱신. 자동 서버 조회 간격은 인스턴스당 Codex 2분, Claude Code 5분. HTTP 429는 Retry-After에 따라 최소 5분 동안 재시도를 제한
 
-**Codex, Claude Code, OpenCode, Command Code 사용량 조회를 지원합니다.** Codex는 일반 ChatGPT 대화 한도가 아니라 Codex 한도입니다. 기존 설정 호환을 위해 서비스 ID `chatgpt`, `claude`를 유지합니다.
+**Codex, Claude Code 사용량 조회를 지원합니다.** Codex는 일반 ChatGPT 대화 한도가 아니라 Codex 한도입니다. 기존 설정 호환을 위해 서비스 ID `chatgpt`, `claude`를 유지합니다.
 
 샘플 실행은 네트워크 조회·로그인·설정 저장을 하지 않으며 화면 하단에 샘플임을 표시합니다. 샘플 플랜과 수치는 레이아웃 확인용입니다.
 
@@ -71,13 +71,6 @@ dotnet run --project tests/AiUsage.Checks -- --live-claude
 
 참고: [Claude 공식 인증·저장 위치](https://code.claude.com/docs/en/authentication), [Claude 저장소의 OAuth 사용량 응답 보고](https://github.com/anthropics/claude-code/issues/31021)
 
-### OpenCode 연결
-
-- **OpenCode**: 구독 중이면 플랜을 `Go`로 표시하고 OpenCode Go API `https://opencode.ai/zen/go/v1/usage`에서 rolling 5시간과 weekly 사용량·리셋 시간을 다른 서비스와 같은 형식으로 읽습니다. API 키는 `~/.local/share/opencode/auth.json`의 `opencode-go` 항목(`{ "type": "api", "key": "..." }`)에서 가져오며, 없으면 `OPENCODE_API_KEY` 환경 변수를 대신 사용합니다. 둘 다 없으면 `OpenCode login required · connect in Settings`를 표시합니다.
-- **Command Code**: 구독 중이면 플랜을 `Go`/`Goat`/`Pro`(그 외 `Max`·`Team`·`Provider` 등) 표기로 정규화해 표시하고, `https://api.commandcode.ai`의 `/alpha/whoami` → `/alpha/billing/credits` + `/alpha/usage/summary` 응답(`windowLimits.fiveHour`/`weekly`의 `used`/`cap`·`resetAt`, 월간 `monthlyCredits` 대비 `totalCost`)으로 5시간과 weekly 사용량·리셋 시간을 다른 서비스와 같은 형식으로 읽습니다. API 키는 `~/.commandcode/auth.json`의 `apiKey`에서 가져오며, 없으면 `COMMAND_CODE_API_KEY`(`COMMANDCODE_API_KEY`, `CMD_API_KEY`도 지원) 환경 변수를 대신 사용합니다. 둘 다 없거나 사용량을 찾지 못하면 `Command Code login required · connect in Settings`를 표시합니다.
-
-두 서비스의 `Connect` 버튼은 각 로그인 페이지를 기본 브라우저에서 엽니다. 로그인 후 앱을 새로고침하면 로컬 credential 또는 환경 변수를 사용해 자동 조회합니다.
-
 빌드 결과가 있으면 `artifacts/package/Desktop/AiUsage.Desktop.exe`를 실행하세요. 이 실행 파일은 데스크톱 미리보기이며 위젯 패널 등록은 아래 단계가 필요합니다.
 
 
@@ -112,6 +105,14 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Con
 
 이후 **Win + W → 위젯 추가 → AI Usage**를 고정하세요. 작음·보통·큼 크기를 지원하며 모든 크기에 동일한 레이아웃을 사용하므로 작은 크기에서는 일부 내용이 잘릴 수 있습니다. 등록 이후 `artifacts/package`를 이동하거나 삭제하지 마세요. 다른 PC 배포에는 신뢰할 수 있는 인증서 서명 또는 Microsoft Store 배포가 필요합니다.
 
+기존 개발 등록을 먼저 제거한 뒤 새로 빌드해 설치하려면 루트의 제거·빌드·설치 스크립트를 사용하세요.
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\uninstall-build-install.ps1
+```
+
+개발자 모드를 확인하고 이 저장소의 실행 중인 Desktop·Provider를 종료한 뒤 개발 등록을 제거하고, 남은 `artifacts/package`를 `artifacts/removed-package-<고유 ID>`로 옮긴 다음 `build-install.ps1`을 그대로 실행합니다. 기본적으로 `Remove-AppxPackage -PreserveApplicationData`로 제거해 앱 데이터를 보존하며, `-RemoveAppData`를 주면 설정과 로그인까지 삭제합니다. `-Configuration`은 `build-install.ps1`에 전달합니다. 서명된 설치나 이 저장소의 `artifacts` 밖에 있는 개발 등록은 제거하지 않고 중단합니다. 제거 단계도 `build-install.ps1`과 같은 잠금 파일을 사용하므로 두 스크립트를 동시에 실행할 수 없습니다.
+
 개발 등록을 제거하려면 다음 명령을 실행하세요. 기본적으로 앱 등록만 제거하고 `%LOCALAPPDATA%/AiUsageWidget`의 설정은 보존합니다.
 
 ```powershell
@@ -144,7 +145,7 @@ dotnet run --project tests/AiUsage.Checks
 
 `Customize widget` 메뉴가 열려도 설정 화면으로 바뀌지 않는다면 패키지 매니페스트의 `IWidgetProvider2` 프록시 등록을 확인하세요. 이 프로젝트는 MSIX를 직접 조립하므로 Windows App SDK의 `package.appxfragment`에 있는 사용자 지정 콜백 프록시를 데스크톱 COM용 `windows.comInterface` 형식으로 `packaging/AppxManifest.xml`에 명시합니다. `IsCustomizable`과 C# 인터페이스 구현만으로는 프로세스 간 콜백 전달이 되지 않습니다. [COM 인터페이스 등록 문서](https://learn.microsoft.com/en-us/uwp/schemas/appxpackage/uapmanifestschema/element-com-cominterface)를 참고하세요. 매니페스트 변경 후에는 패키지 버전을 올리고, `build-install.ps1`을 실행해 빌드·검증 후 패키지를 다시 등록해야 합니다.
 
-현재 검증 결과: Codex·Claude Code·OpenCode·Command Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사를 통과했습니다. Claude OAuth는 PKCE 파라미터 생성, state 불일치 거부, 붙여넣기 형식 3종 파싱, DPAPI 저장 왕복과 평문 미노출, 만료 시 자동 갱신 및 토큰 회전 저장을 가짜 HTTP 전송으로 검증했습니다. 모델별 주간 한도는 `limits`의 `weekly_scoped` 파싱·다른 모델 미매칭·구형 키 표기 매칭·빈 값 시 줄 미추가를 검증했습니다. 실제 Max 계정으로 브라우저 로그인, 사용량 조회, Fable 주간 한도 표시까지 실기 검증했습니다. Codex는 실제 계정 조회를 검증했습니다. 다른 제공자의 실제 로그인 및 라이브 사용량 조회는 별도 실행이 필요합니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
+현재 검증 결과: Codex·Claude Code 응답 매핑, 가짜 HTTP 전송을 이용한 인증·429 대기·401 메시지·인증 파일 보존 검사를 통과했습니다. Claude OAuth는 PKCE 파라미터 생성, state 불일치 거부, 붙여넣기 형식 3종 파싱, DPAPI 저장 왕복과 평문 미노출, 만료 시 자동 갱신 및 토큰 회전 저장을 가짜 HTTP 전송으로 검증했습니다. 모델별 주간 한도는 `limits`의 `weekly_scoped` 파싱·다른 모델 미매칭·구형 키 표기 매칭·빈 값 시 줄 미추가를 검증했습니다. 실제 Max 계정으로 브라우저 로그인, 사용량 조회, Fable 주간 한도 표시까지 실기 검증했습니다. Codex는 실제 계정 조회를 검증했습니다. Windows 위젯 패널 내 클릭·테마 전환도 실기 검증 범위에 포함하지 않습니다.
 
 v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 완료했습니다. 샘플 Status와 로그인 버튼이 포함된 실제 Setting의 라이트·다크 PNG도 확인했습니다.
 
@@ -153,8 +154,6 @@ v1.2.0.0 실행 파일·MSIX 빌드 및 이 PC의 Windows 패키지 등록을 �
 ```powershell
 dotnet run --project tests/AiUsage.Checks -- --live
 dotnet run --project tests/AiUsage.Checks -- --live-claude
-dotnet run --project tests/AiUsage.Checks -- --live-opencode
-dotnet run --project tests/AiUsage.Checks -- --live-commandcode
 ```
 
 Codex 연결 참고: [공식 App Server 문서](https://learn.chatgpt.com/docs/app-server), [공식 인증 문서](https://learn.chatgpt.com/docs/auth). 사용자 제공 예제인 [spourdei/codex-usage-widget](https://github.com/spourdei/codex-usage-widget)과 [ZeroP27/codex-usage](https://github.com/ZeroP27/codex-usage)의 RPC 방식·시간 창 매핑을 참고하여 C#으로 별도 구현했습니다. 외부 프로젝트의 OAuth 토큰 직접 관리·계정 전환·리셋 크레딧 기능은 포함하지 않습니다.

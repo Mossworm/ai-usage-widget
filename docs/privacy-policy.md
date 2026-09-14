@@ -27,15 +27,11 @@ AI Usage Widget(이하 "앱")은 이용자의 개인정보를 **수집·전송·
 
 - Codex: 로컬 `codex app-server` 프로세스(계정 및 사용 한도 조회 요청만 수행)
 - Claude Code CLI: `%USERPROFILE%\.claude\.credentials.json` (`CLAUDE_CONFIG_DIR` 지원)
-- OpenCode: `opencode\auth.json`
-- Command Code: 해당 CLI가 저장한 자격 증명
 
 ### 5. 네트워크 통신
 앱은 이용자가 연결한 서비스의 공식 엔드포인트에만 직접 연결합니다. 중계 서버는 사용하지 않습니다.
 
 - `api.anthropic.com`, `claude.ai`, `platform.claude.com`, `console.anthropic.com` (Anthropic)
-- `opencode.ai`
-- `api.commandcode.ai`, `commandcode.ai`
 - Codex 사용량은 로컬 Codex 프로세스를 통해 OpenAI 서비스에서 조회됩니다.
 
 이 통신에는 해당 서비스 제공자의 개인정보 처리방침 및 이용약관이 적용됩니다. 앱은 프롬프트 실행이나 모델 호출을 하지 않으며, 계정 사용량 정보만 조회합니다.
@@ -78,15 +74,11 @@ If you already have the relevant CLIs installed and signed in, the app **reads o
 
 - Codex: the local `codex app-server` process (account and rate-limit requests only)
 - Claude Code CLI: `%USERPROFILE%\.claude\.credentials.json` (honors `CLAUDE_CONFIG_DIR`)
-- OpenCode: `opencode\auth.json`
-- Command Code: credentials stored by that CLI
 
 ### 5. Network connections
 The app connects directly to the official endpoints of the services you choose to connect. No relay or intermediary server is used.
 
 - `api.anthropic.com`, `claude.ai`, `platform.claude.com`, `console.anthropic.com` (Anthropic)
-- `opencode.ai`
-- `api.commandcode.ai`, `commandcode.ai`
 - Codex usage is retrieved from OpenAI's service through the local Codex process.
 
 These connections are governed by the respective provider's privacy policy and terms. The app does not run prompts or invoke models; it only reads account usage information.

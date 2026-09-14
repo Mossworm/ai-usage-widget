@@ -1,5 +1,3 @@
-using System.Diagnostics;
-
 namespace AiUsage;
 
 public static class SubscriptionLogin
@@ -8,9 +6,7 @@ public static class SubscriptionLogin
         ?? throw new ArgumentException("Unknown subscription");
     public static string? FromArgument(string argument) => argument.ToLowerInvariant() switch {
         "--login" or "aiusage:login" => "chatgpt",
-        "--login-claude" or "aiusage:login-claude" => "claude",
-        "aiusage:login-opencode" => "opencode",
-        "aiusage:login-commandcode" => "commandcode", _ => null
+        "--login-claude" or "aiusage:login-claude" => "claude", _ => null
     };
     // Claude signs in through the browser and finishes with a code the user pastes back,
     // so it cannot complete in one call the way the other subscriptions do.
@@ -20,12 +16,7 @@ public static class SubscriptionLogin
         if (id == "chatgpt") { await CodexClient.LoginAsync(cancellation); return; }
         // Claude cannot finish here: the browser hands the code back to the user, not to the app.
         if (RequiresCode(id)) throw new UsageConnectionException($"Start {Name(id)} login with BeginClaude and finish it with the pasted code");
-        var url = id switch {
-            "opencode" => "https://opencode.ai/auth",
-            "commandcode" => "https://commandcode.ai/",
-            _ => throw new ArgumentException("Unknown subscription")
-        };
-        Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        throw new ArgumentException("Unknown subscription");
     }
     public static ClaudeAuthorization BeginClaude()
     {

@@ -30,24 +30,6 @@ if (args.Contains("--live-claude")) {
         Environment.ExitCode = 1; return;
     }
 }
-if (args.Contains("--live-opencode")) {
-    try {
-        var usage = await new OpenCodeClient().FetchAsync();
-        Console.WriteLine(JsonSerializer.Serialize(usage, LocalStore.Json)); return;
-    } catch (Exception e) {
-        Console.Error.WriteLine(e is UsageConnectionException ? e.Message : "Live check failed: " + e.GetType().Name);
-        Environment.ExitCode = 1; return;
-    }
-}
-if (args.Contains("--live-commandcode")) {
-    try {
-        var usage = await new CommandCodeClient().FetchAsync();
-        Console.WriteLine(JsonSerializer.Serialize(usage, LocalStore.Json)); return;
-    } catch (Exception e) {
-        Console.Error.WriteLine(e is UsageConnectionException ? e.Message : "Live check failed: " + e.GetType().Name);
-        Environment.ExitCode = 1; return;
-    }
-}
 
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); Console.WriteLine("PASS " + name); passed++; }
@@ -66,15 +48,15 @@ var now = new DateTimeOffset(2026, 9, 12, 12, 0, 0, TimeSpan.FromHours(9));
 var data = Catalog.Sample(now);
 var prefs = new Preferences();
 Card.ToggleImage = enabled => "data:image/png;base64," + (enabled ? "ON" : "OFF");
-Check(prefs.Enabled.Count == 4, "Four services enabled initially");
+Check(prefs.Enabled.Count == 2, "Two services enabled initially");
 prefs.Toggle("claude");
 Check(!prefs.Enabled.Contains("claude"), "Toggle disables service");
 prefs.Toggle("invalid-id");
-Check(prefs.Enabled.Count == 3, "Unknown service is ignored");
+Check(prefs.Enabled.Count == 1, "Unknown service is ignored");
 using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     var text = doc.RootElement.ToString();
     Check(!text.Contains("Claude Code  ·"), "Disabled subscription hidden");
-    Check(!text.Contains("ChatGPT API") && !text.Contains("Claude API") && !text.Contains("Gemini API") && text.Contains("OpenCode"), "Supported providers are visible");
+    Check(!text.Contains("ChatGPT API") && !text.Contains("Claude API") && !text.Contains("Gemini API") && text.Contains("Codex"), "Supported providers are visible");
     var body = doc.RootElement.GetProperty("body");
     Check(body[body.GetArrayLength() - 1].GetProperty("type").GetString() == "ColumnSet", "Status has no footer");
     Check(!text.Contains("\"verb\":\"status\"") && !text.Contains("\"verb\":\"settings\""), "Widget has no Status or Settings navigation buttons");
@@ -82,7 +64,7 @@ using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
 prefs.Settings = true;
 using (var doc = JsonDocument.Parse(Card.Render(prefs, data, now))) {
     var body = doc.RootElement.GetProperty("body");
-    Check(body.GetArrayLength() == 6, "Sample settings contains header, four toggles and Back footer");
+    Check(body.GetArrayLength() == 4, "Sample settings contains header, two toggles and Back footer");
     Check(body[2].GetProperty("selectAction").GetProperty("verb").GetString() == "toggle:claude", "Setting row targets correct service");
 }
 prefs.Settings = false; prefs.Enabled.Clear();
@@ -113,12 +95,12 @@ try {
     var path = Path.Combine(dir, "settings.json");
     LocalStore.SavePreferences(prefs, path);
     Check(LocalStore.ReadPreferences(path).Enabled.Count == 0, "All-off configuration survives reload");
-    File.WriteAllText(path, "broken"); Check(LocalStore.ReadPreferences(path).Enabled.Count == 4, "Malformed settings recover");
-    File.WriteAllText(path, "{\"Enabled\":null}"); Check(LocalStore.ReadPreferences(path).Enabled.Count == 4, "Null settings recover");
+    File.WriteAllText(path, "broken"); Check(LocalStore.ReadPreferences(path).Enabled.Count == 2, "Malformed settings recover");
+    File.WriteAllText(path, "{\"Enabled\":null}"); Check(LocalStore.ReadPreferences(path).Enabled.Count == 2, "Null settings recover");
     Check(LocalStore.ReadUsage(Path.Combine(dir, "missing.json")).Services.Length == 0, "Missing usage file is disconnected");
     File.WriteAllText(path, "{\"Services\":null}"); Check(LocalStore.ReadUsage(path).Services.Length == 0, "Invalid snapshot recovers");
     File.WriteAllText(path, JsonSerializer.Serialize(data, LocalStore.Json));
-    Check(LocalStore.ReadUsage(path).Services.Length == 4 && LocalStore.ReadUsage(path).Services[1].Plan == "Max", "Usage snapshot preserves supported services");
+    Check(LocalStore.ReadUsage(path).Services.Length == 2 && LocalStore.ReadUsage(path).Services[1].Plan == "Max", "Usage snapshot preserves supported services");
 } finally { foreach (var file in Directory.GetFiles(dir)) File.Delete(file); Directory.Delete(dir); }
 UsageEntry Parse(string json) { using var doc = JsonDocument.Parse(json); return CodexClient.Parse(doc.RootElement, "plus", now); }
 var actual = Parse("""{"rateLimits":{"limitId":"codex","primary":{"usedPercent":23,"windowDurationMins":300,"resetsAt":1789185600},"secondary":{"usedPercent":41,"windowDurationMins":10080,"resetsAt":1789790400},"planType":"pro"}}""");
@@ -144,7 +126,7 @@ using (var doc = JsonDocument.Parse(Card.Render(new() { Settings = true }, new(n
     var rows = body.EnumerateArray().Where(x => x.GetProperty("type").GetString() == "ColumnSet").ToArray();
     var codexColumns = rows[0].GetProperty("columns");
     var claudeColumns = rows[1].GetProperty("columns");
-    Check(rows.Length == 4 && codexColumns.GetArrayLength() == 3 && claudeColumns.GetArrayLength() == 3, "Each service row has name, connection, and toggle columns");
+    Check(rows.Length == 2 && codexColumns.GetArrayLength() == 3 && claudeColumns.GetArrayLength() == 3, "Each service row has name, connection, and toggle columns");
     Check(codexColumns[1].GetProperty("items")[0].GetProperty("actions")[0].GetProperty("url").GetString() == "aiusage:login", "Codex connects through its registered login protocol");
     Check(claudeColumns[1].GetProperty("items")[0].GetProperty("actions")[0].GetProperty("url").GetString() == "aiusage:login-claude", "Claude connects through its registered login protocol");
 }

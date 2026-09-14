@@ -27,8 +27,6 @@ public static class Card
                             new { type = "Action.OpenUrl", title = "Connect", url = service.Id switch {
                                 "chatgpt" => "aiusage:login",
                                 "claude" => "aiusage:login-claude",
-                                "opencode" => "aiusage:login-opencode",
-                                "commandcode" => "aiusage:login-commandcode",
                                 _ => "https://example.invalid"
                             } }
                         } }], "auto") : Column([]),
