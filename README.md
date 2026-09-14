@@ -104,7 +104,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Msi
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Configuration Debug
 ```
 
-기본 실행, `-BuildOnly`, `-Msix` 모두 빌드·검증 후 `artifacts/msix/<패키지 이름>_<버전>_<아키텍처>.msix`를 생성합니다. 현재 매니페스트 기준 파일명은 `Mossworm.AiUsageWidget_1.2.4.0_x64.msix`입니다. 최신 패키지는 `artifacts/AiUsageWidget.msix`에도 복사합니다. 같은 버전은 덮어쓰고 다른 버전의 MSIX는 보존합니다. MSIX는 서명되지 않으며 개발 설치는 매니페스트 등록 방식입니다.
+기본 실행, `-BuildOnly`, `-Msix` 모두 빌드·검증 후 `artifacts/msix/<패키지 이름>_<버전>_<아키텍처>.msix`를 생성합니다. 현재 매니페스트 기준 파일명은 `Mossworm.AIUsageWidget_1.2.4.0_x64.msix`입니다. 최신 패키지는 `artifacts/AiUsageWidget.msix`에도 복사합니다. 같은 버전은 덮어쓰고 다른 버전의 MSIX는 보존합니다. MSIX는 서명되지 않으며 개발 설치는 매니페스트 등록 방식입니다.
 
 게시 파일과 패키징 로그(`resources.log`, `packaging.log`)는 `artifacts/publish/`에 생성됩니다. 매 실행 전에 준비 폴더 `artifacts/publish/package`만 비우고, MSIX와 로그는 최신 결과로 갱신합니다. `-BuildOnly`와 `-Msix`는 기존 설치를 교체하지 않으며 개발자 모드가 필요하지 않습니다. 기본 실행은 패키지 생성 후 설치까지 진행하며, 설치 성공 시 실행 파일은 `artifacts/package`에 둡니다.
 
@@ -115,7 +115,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build-install.ps1 -Con
 개발 등록을 제거하려면 다음 명령을 실행하세요. 기본적으로 앱 등록만 제거하고 `%LOCALAPPDATA%/AiUsageWidget`의 설정은 보존합니다.
 
 ```powershell
-Get-AppxPackage -Name Mossworm.AiUsageWidget | Remove-AppxPackage
+Get-AppxPackage -Name Mossworm.AIUsageWidget | Remove-AppxPackage
 ```
 
 위젯 패널은 Windows가 Adaptive Card를 렌더링하므로 버튼·간격·모서리가 데스크톱 미리보기와 일부 다릅니다. 실제 패널에서의 최종 모양과 테마 전환은 설치 후 확인해야 합니다.
