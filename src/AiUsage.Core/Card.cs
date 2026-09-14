@@ -8,7 +8,7 @@ public static class Card
     static object Text(string text, bool subtle = false) => new { type = "TextBlock", text, wrap = true, size = "Small", spacing = "None", isSubtle = subtle };
     static object Action(string title, string verb) => new { type = "Action.Execute", title, verb, associatedInputs = "none" };
     static object Column(object[] items, object? width = null) => new { type = "Column", width = width ?? "stretch", items, spacing = "Small" };
-    static object Bar(UsageWindow window, bool secondary) => new { type = "Image", url = CardImages.Progress(window.Percent, secondary), size = "Stretch", height = "3px", spacing = "None", altText = $"{window.Label} remaining {Labels.Percent(window.Percent)}" };
+    static object Bar(UsageWindow window, int index) => new { type = "Image", url = CardImages.Progress(window.Percent, index), size = "Stretch", height = "3px", spacing = "None", altText = $"{window.Label} remaining {Labels.Percent(window.Percent)}" };
     public static string Render(Preferences prefs, UsageSnapshot data, DateTimeOffset now)
     {
         var body = new List<object>();
@@ -61,7 +61,7 @@ public static class Card
                     else {
                         var windows = Labels.Windows(service, usage);
                         foreach (var window in windows) items.Add(Text($"{window.Label} {Labels.Percent(window.Percent)} · {Labels.Reset(window.Reset, now)}", true));
-                        for (var i = 0; i < windows.Length; i++) items.Add(Bar(windows[i], i != 0));
+                        for (var i = 0; i < windows.Length; i++) items.Add(Bar(windows[i], i));
                     }
                 }
                 if (body.Count > 0) body.Add(new {

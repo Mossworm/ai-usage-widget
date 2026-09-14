@@ -168,7 +168,7 @@ public sealed class MainWindow : Window
                 else {
                     var windows = Labels.Windows(service, usage);
                     foreach (var window in windows) stack.Children.Add(Text($"{window.Label} {Labels.Percent(window.Percent)} · {Labels.Reset(window.Reset, DateTimeOffset.Now)}", true));
-                    for (var i = 0; i < windows.Length; i++) stack.Children.Add(Progress(windows[i].Percent, i == 0 ? "#4BA3EF" : "#70BB7B"));
+                    for (var i = 0; i < windows.Length; i++) stack.Children.Add(Progress(windows[i].Percent, i));
                 }
             }
             var border = new Border { Child = grid, BorderThickness = new(0, 0, 0, 1) }; border.SetResourceReference(Border.BorderBrushProperty, "Line"); content.Children.Add(border);
@@ -196,8 +196,10 @@ public sealed class MainWindow : Window
     {
         if (e.Key == System.Windows.Input.Key.Enter) { e.Handled = true; await CompleteCodeLoginAsync(); }
     }
-    FrameworkElement Progress(double? value, string color)
+    static readonly string[] TrackColors = ["#4BA3EF", "#70BB7B", "#E0A048"];
+    FrameworkElement Progress(double? value, int index)
     {
+        var color = TrackColors[Math.Clamp(index, 0, TrackColors.Length - 1)];
         var fraction = Labels.RemainingPercent(value) ?? 0;
         var grid = new Grid { Height = 4 };
         grid.ColumnDefinitions.Add(new() { Width = new(fraction, GridUnitType.Star) });

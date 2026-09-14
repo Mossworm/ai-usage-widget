@@ -11,12 +11,13 @@ public static class CardImages
     public const string SeparatorColor = "#20808080";
     public static readonly string Separator = Png(560, 1, (_, _) => (128, 128, 128, 32));
 
-    public static string Progress(double? value, bool weekly)
+    // One color per window row: 5-hour, weekly, then any per-model weekly quota.
+    static readonly (int R, int G, int B)[] Track = [(75, 163, 239), (112, 187, 123), (224, 160, 72)];
+    public static string Progress(double? value, int index)
     {
         var p = Labels.RemainingPercent(value) ?? 0;
-        return Png(560, 8, (x, y) => x < 560 * p / 100
-            ? weekly ? (112, 187, 123, 255) : (75, 163, 239, 255)
-            : (140, 145, 155, 45));
+        var fill = Track[Math.Clamp(index, 0, Track.Length - 1)];
+        return Png(560, 8, (x, y) => x < 560 * p / 100 ? (fill.R, fill.G, fill.B, 255) : (140, 145, 155, 45));
     }
     public static string Dot(string hex)
     {

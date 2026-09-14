@@ -18,8 +18,13 @@ if (args.Contains("--live")) {
 }
 if (args.Contains("--live-claude")) {
     try {
-        var usage = await new ClaudeClient().FetchAsync();
-        Console.WriteLine(JsonSerializer.Serialize(usage, LocalStore.Json)); return;
+        var (response, plan) = await new ClaudeClient().FetchResponseAsync();
+        Console.WriteLine(JsonSerializer.Serialize(ClaudeClient.Parse(response, plan, DateTimeOffset.Now), LocalStore.Json));
+        // Names only, so per-model rows can be configured without printing the account's figures.
+        Console.WriteLine("Quota windows reported: " + string.Join(", ", response.EnumerateObject().Select(x => x.Name)));
+        Console.WriteLine("Per-model weekly quotas: " + string.Join(", ", ClaudeClient.ScopedModelNames(response)));
+        Console.WriteLine("Model rows shown: " + string.Join(", ", ClaudeClient.TrackedModels));
+        return;
     } catch (Exception e) {
         Console.Error.WriteLine(e is UsageConnectionException ? e.Message : "Live check failed: " + e.GetType().Name);
         Environment.ExitCode = 1; return;
